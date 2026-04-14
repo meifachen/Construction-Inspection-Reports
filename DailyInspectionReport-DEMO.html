@@ -2013,6 +2013,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSignature();
   initServiceWorker();
   applyRolePermissions();
+  loadPunchListFromStorage();
 
   setInterval(() => {
     if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
@@ -2042,6 +2043,10 @@ function loadAIProviders() {
     aiProviders = JSON.parse(localStorage.getItem('fieldreport_ai_providers') || '[]');
   } catch(e) {
     aiProviders = [];
+  }
+  if (aiProviders.length === 0) {
+    aiProviders = getDefaultAIProviders();
+    saveAIProviders();
   }
   renderAIProviders();
 }
@@ -2122,8 +2127,18 @@ function getDefaultEndpoint(name) {
   if (n.includes('openai')) return 'https://api.openai.com/v1/chat/completions';
   if (n.includes('claude') || n.includes('anthropic')) return 'https://api.anthropic.com/v1/messages';
   if (n.includes('google') || n.includes('gemini')) return 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  if (n.includes('nvidia') || n.includes('nim')) return 'https://integrate.api.nvidia.com/v1/chat/completions';
   if (n.includes('openrouter')) return 'https://openrouter.ai/api/v1/chat/completions';
   return '';
+}
+
+function getDefaultAIProviders() {
+  return [
+    {"name": "NVIDIA Gemma 4 31B", "apiKey": "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", "model": "google/gemma-4-31b-it", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": true},
+    {"name": "NVIDIA Kimi K2.5", "apiKey": "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", "model": "moonshotai/kimi-k2.5", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false},
+    {"name": "NVIDIA Qwen3 80B", "apiKey": "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", "model": "qwen/qwen3-next-80b-a3b-thinking", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false},
+    {"name": "NVIDIA DeepSeek V3.1", "apiKey": "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", "model": "deepseek-ai/deepseek-v3.1", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false}
+  ];
 }
 
 function removeAIProvider(idx) {
@@ -2826,6 +2841,8 @@ function resetForm() {
   document.getElementById('subsBody').innerHTML = '';
   document.getElementById('materialsList').innerHTML = '';
   document.getElementById('visitorsList').innerHTML = '';
+  document.getElementById('payItemsBody').innerHTML = '';
+  document.getElementById('punchlistContainer').innerHTML = '';
   photoData = { sitePhotos: [], redlinePhotos: [], tallyPhotos: [], deliveryPhotos: [], damagePhotos: [] };
   ['sitePhotos','redlinePhotos','tallyPhotos','deliveryPhotos','damagePhotos'].forEach(id => {
     const el = document.getElementById(id);
@@ -2901,6 +2918,13 @@ function populateForm(d) {
   document.getElementById('safetyIssues').value = d.safetyIssues || '';
   document.getElementById('preparedBy').value = d.preparedBy || '';
 
+  // Restore user role
+  if (d.userRole) {
+    localStorage.setItem('fieldreport_user_role', d.userRole);
+    const roleSelect = document.getElementById('userRoleSelect');
+    if (roleSelect) { roleSelect.value = d.userRole; applyRolePermissions(); }
+  }
+
   // Restore pay items
   if (d.payItems && d.payItems.length > 0) {
     const tbody = document.getElementById('payItemsBody');
@@ -2933,6 +2957,12 @@ function populateForm(d) {
       }
     });
     updateSafetyScore();
+  }
+
+  // Restore punchlist
+  if (d.punchlist && d.punchlist.length > 0) {
+    localStorage.setItem('fieldreport_punchlist', JSON.stringify(d.punchlist));
+    loadPunchListFromStorage();
   }
 
   if (d.photos) {
@@ -3511,7 +3541,11 @@ function cloneAsTemplate(templateId) {
     utilityDamage: '',
     equipService: '',
     safetyIssues: '',
-    preparedBy: '',
+    payItems: template.payItems || [],
+    checklists: template.checklists || { osha: [], swppp: [], dot: [] },
+    punchlist: [],
+    preparedBy: template.preparedBy || '',
+    userRole: template.userRole || 'Inspector',
     photos: { sitePhotos: [], redlinePhotos: [], tallyPhotos: [], deliveryPhotos: [], damagePhotos: [] },
     signature: null
   };
@@ -3535,6 +3569,9 @@ function exportAllReports() {
     fieldreport_drafts: localStorage.getItem('fieldreport_drafts') || '{}',
     fieldreport_settings: localStorage.getItem('fieldreport_settings') || '{}',
     fieldreport_ai_providers: localStorage.getItem('fieldreport_ai_providers') || '[]',
+    fieldreport_punchlist: localStorage.getItem('fieldreport_punchlist') || '[]',
+    fieldreport_pay_items: localStorage.getItem('fieldreport_pay_items') || '[]',
+    fieldreport_user_role: localStorage.getItem('fieldreport_user_role') || 'Inspector',
     exportDate: new Date().toISOString()
   };
 
@@ -3576,6 +3613,15 @@ function importReports(event) {
       }
       if (data.fieldreport_ai_providers) {
         localStorage.setItem('fieldreport_ai_providers', data.fieldreport_ai_providers);
+      }
+      if (data.fieldreport_punchlist) {
+        localStorage.setItem('fieldreport_punchlist', data.fieldreport_punchlist);
+      }
+      if (data.fieldreport_pay_items) {
+        localStorage.setItem('fieldreport_pay_items', data.fieldreport_pay_items);
+      }
+      if (data.fieldreport_user_role) {
+        localStorage.setItem('fieldreport_user_role', data.fieldreport_user_role);
       }
 
       document.getElementById('importFileInput').value = '';
@@ -4337,16 +4383,18 @@ function addPayItem() {
     <td><input type="text" placeholder="1" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
     <td><input type="text" placeholder="Earthwork" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
     <td><input type="text" placeholder="CY" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
-    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;onchange="updatePayItemProgress()"></td>
-    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;onchange="updatePayItemProgress()"></td>
-    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;onchange="updatePayItemProgress()"></td>
+    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;" onchange="updatePayItemProgress()"></td>
+    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;" onchange="updatePayItemProgress()"></td>
+    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;" onchange="updatePayItemProgress()"></td>
     <td><span>0%</span> <button class="remove-btn" onclick="this.parentElement.parentElement.remove()" style="margin-left:4px;">&times;</button></td>
   `;
   tbody.appendChild(tr);
 }
 
 function updatePayItemProgress() {
-  const rows = document.getElementById('payItemsBody').querySelectorAll('tr');
+  const tbody = document.getElementById('payItemsBody');
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
   rows.forEach(tr => {
     const cells = tr.querySelectorAll('td input');
     if (cells.length >= 6) {
@@ -4394,6 +4442,36 @@ function updateSafetyScore() {
 }
 
 // ======================== FEATURE 6: PUNCH LIST ========================
+function loadPunchListFromStorage() {
+  const container = document.getElementById('punchlistContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  const items = JSON.parse(localStorage.getItem('fieldreport_punchlist') || '[]');
+  items.forEach(pl => {
+    const item = document.createElement('div');
+    item.className = 'punchlist-item ' + (pl.priority || 'medium');
+    item.innerHTML = `
+      <div class="punchlist-header">
+        <div><strong>${escapeHtml(pl.id || '')}</strong></div>
+        <select class="punchlist-status" onchange="this.parentElement.parentElement.className='punchlist-item '+this.value;savePunchList();">
+          <option value="open" ${pl.status==='open'?'selected':''}>Open</option>
+          <option value="in-progress" ${pl.status==='in-progress'?'selected':''}>In Progress</option>
+          <option value="closed" ${pl.status==='closed'?'selected':''}>Closed</option>
+        </select>
+      </div>
+      <input type="text" placeholder="Description" value="${escapeHtml(pl.description || '')}" style="width:100%;border:none;padding:4px 0;background:transparent;margin-bottom:4px;font-size:13px;" onchange="savePunchList()">
+      <input type="text" placeholder="Location/STA" value="${escapeHtml(pl.location || '')}" style="width:100%;border:none;padding:4px 0;background:transparent;margin-bottom:4px;font-size:13px;" onchange="savePunchList()">
+      <select style="width:100%;border:1px solid var(--border);padding:4px;margin-bottom:4px;font-size:13px;" onchange="this.parentElement.className='punchlist-item '+(this.value=='high'?'high':this.value=='low'?'low':'medium');savePunchList();">
+        <option value="medium" ${pl.priority==='medium'?'selected':''}>Priority: Medium</option>
+        <option value="high" ${pl.priority==='high'?'selected':''}>Priority: High</option>
+        <option value="low" ${pl.priority==='low'?'selected':''}>Priority: Low</option>
+      </select>
+      <button class="remove-btn" onclick="this.parentElement.remove();savePunchList();" style="margin-top:4px;">&times; Delete</button>
+    `;
+    container.appendChild(item);
+  });
+}
+
 function addPunchListItem() {
   const container = document.getElementById('punchlistContainer');
   const id = 'PL' + Date.now();
@@ -5189,10 +5267,12 @@ document.addEventListener('click', (e) => {
     "logo": ""
   };
 
-  // AI Providers
+  // AI Providers (NVIDIA NIM endpoints)
   const aiProviders = [
-    {"name": "OpenAI", "apiKey": "demo-key-not-real", "model": "gpt-4o-mini", "endpoint": "https://api.openai.com/v1/chat/completions", "active": true},
-    {"name": "Anthropic", "apiKey": "demo-key-not-real", "model": "claude-3-haiku-20240307", "endpoint": "https://api.anthropic.com/v1/messages", "active": false}
+    {"name": "NVIDIA Gemma 4 31B", "apiKey": "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", "model": "google/gemma-4-31b-it", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": true},
+    {"name": "NVIDIA Kimi K2.5", "apiKey": "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", "model": "moonshotai/kimi-k2.5", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false},
+    {"name": "NVIDIA Qwen3 80B", "apiKey": "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", "model": "qwen/qwen3-next-80b-a3b-thinking", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false},
+    {"name": "NVIDIA DeepSeek V3.1", "apiKey": "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", "model": "deepseek-ai/deepseek-v3.1", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false}
   ];
 
   // Save all to localStorage (object keyed by ID, matching saveDraft() format)
