@@ -2900,6 +2900,38 @@ function populateForm(d) {
   document.getElementById('safetyIssues').value = d.safetyIssues || '';
   document.getElementById('preparedBy').value = d.preparedBy || '';
 
+  // Restore pay items
+  if (d.payItems && d.payItems.length > 0) {
+    const tbody = document.getElementById('payItemsBody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      d.payItems.forEach(row => {
+        addPayItem();
+        const tr = tbody.lastElementChild;
+        const inputs = tr.querySelectorAll('td input');
+        row.forEach((val, i) => { if (inputs[i]) inputs[i].value = val; });
+      });
+      updatePayItemProgress();
+    }
+  }
+
+  // Restore checklists
+  if (d.checklists) {
+    ['osha', 'swppp', 'dot'].forEach(prefix => {
+      for (let i = 1; i <= 10; i++) {
+        const cb = document.getElementById(prefix + i);
+        if (cb) cb.checked = false;
+      }
+      if (d.checklists[prefix]) {
+        d.checklists[prefix].forEach(i => {
+          const cb = document.getElementById(prefix + i);
+          if (cb) cb.checked = true;
+        });
+      }
+    });
+    updateSafetyScore();
+  }
+
   if (d.photos) {
     photoData = d.photos;
     Object.keys(photoData).forEach(k => renderPhotoGrid(k));

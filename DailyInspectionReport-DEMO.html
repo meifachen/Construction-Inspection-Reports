@@ -2901,6 +2901,40 @@ function populateForm(d) {
   document.getElementById('safetyIssues').value = d.safetyIssues || '';
   document.getElementById('preparedBy').value = d.preparedBy || '';
 
+  // Restore pay items
+  if (d.payItems && d.payItems.length > 0) {
+    const tbody = document.getElementById('payItemsBody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      d.payItems.forEach(row => {
+        addPayItem();
+        const tr = tbody.lastElementChild;
+        const inputs = tr.querySelectorAll('td input');
+        row.forEach((val, i) => { if (inputs[i]) inputs[i].value = val; });
+      });
+      updatePayItemProgress();
+    }
+  }
+
+  // Restore checklists
+  if (d.checklists) {
+    ['osha', 'swppp', 'dot'].forEach(prefix => {
+      // Uncheck all first
+      for (let i = 1; i <= 10; i++) {
+        const cb = document.getElementById(prefix + i);
+        if (cb) cb.checked = false;
+      }
+      // Check saved items
+      if (d.checklists[prefix]) {
+        d.checklists[prefix].forEach(i => {
+          const cb = document.getElementById(prefix + i);
+          if (cb) cb.checked = true;
+        });
+      }
+    });
+    updateSafetyScore();
+  }
+
   if (d.photos) {
     photoData = d.photos;
     Object.keys(photoData).forEach(k => renderPhotoGrid(k));
@@ -4916,6 +4950,157 @@ document.addEventListener('click', (e) => {
     return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getUTCDay()];
   }
 
+  // Personnel data (construction groups)
+  // Format: [Group Name, Mon, Tue, Wed, Thu, Fri, Sat, Sun, OT, Total]
+  function getPersonnelForDay(day) {
+    const base = [
+      ["Man Con Pipe Crew", "6", "0", "0", "0", "0", "0", "0", "0", "6"],
+      ["Man Con Excavation", "3", "0", "0", "0", "0", "0", "0", "0", "3"]
+    ];
+    if (day >= 7 && day <= 10) {
+      base.push(["HDD Bore Crew", "3", "0", "0", "0", "0", "0", "0", "0", "3"]);
+    }
+    if (day >= 12) {
+      base.push(["Surface Restoration", "2", "0", "0", "0", "0", "0", "0", "0", "2"]);
+    }
+    return base;
+  }
+
+  // Delivery notes
+  function getDeliveryNotesForDay(day) {
+    const notes = {
+      1: "Ferguson Waterworks delivered 200 LF of 12-inch DIP Class 52 at 0630. Pallet count verified: 4 pallets. Megalug restraint glands (qty 20) delivered by SIGMA Corp.",
+      3: "Ferguson delivery: 180 LF 12-inch DIP + 2 x 8-inch butterfly valves. Crushed limestone base (25 CY) delivered by Martin Marietta at 0700.",
+      5: "Select fill sand (30 CY) from Vulcan Materials delivered at 0645. 6-mil poly sheeting (2 rolls) from HD Supply.",
+      7: "HDD tooling and pilot rods delivered by Vermeer dealer. Additional 12-inch DIP (160 LF) from Ferguson.",
+      8: "2 x Mueller fire hydrant assemblies delivered with valve boxes. Megalug glands (qty 12) from SIGMA.",
+      10: "12-inch DIP (180 LF) and select fill (40 CY) delivered. Wellpoint replacement filters from Sunbelt.",
+      12: "Transition to 8-inch: 200 LF of C900 PVC DR18 delivered from Ferguson. Bacteriological sample kits from AEL.",
+      13: "Additional 8-inch C900 PVC (180 LF). 2 fire hydrant assemblies per CO #005 — Mueller super centurion model.",
+      15: "Final delivery: 170 LF of 8-inch C900 PVC. Tracer wire spools (qty 2). Demobilization supplies."
+    };
+    return notes[day] || "";
+  }
+
+  // Photo notes
+  function getPhotoNotesForDay(day) {
+    const notes = {
+      1: "Photos: MOT setup at NW 21st Ave, trench excavation at STA 0+50, pipe bedding placement, megalug installation on 12-inch joint.",
+      3: "Photos: Storm drain crossing at STA 3+20, lowered profile measurement, valve box installation at STA 4+00.",
+      4: "Photos: Compaction test at STA 1+80 (nuclear density gauge), soil pH test strip.",
+      6: "Photos: Near-miss location at NW 4th St, additional barricades installed, crew toolbox talk.",
+      8: "Photos: Fire hydrant assembly at STA 11+50, hydrostatic pressure test gauge reading 200 PSI, test documentation.",
+      11: "Photos: Saturated site conditions, dewatering pump operations, trench wall stability monitoring.",
+      12: "Photos: 12-inch to 8-inch transition fitting, bacteriological sample collection, Pro-Line lane marking assessment.",
+      14: "Photos: Final pressure test setup, bacteriological test results certificate, trench restoration at STA 20+00.",
+      15: "Photos: Final pipe section at STA 25+00, completed hydrant installations, as-built measurement documentation."
+    };
+    return notes[day] || "";
+  }
+
+  // Redline/As-Built plans
+  function getRedlinePlanForDay(day) {
+    const plans = {
+      3: "Redline: Lowered profile at STA 3+20 — water main dropped 18 inches to clear 24-inch RCP storm drain. Updated vertical alignment on Sheet C-4.",
+      8: "Redline: Fire hydrant locations confirmed at STA 11+50 and STA 12+80. Updated plan Sheet C-6 with actual locations and valve positions.",
+      9: "Redline: Gas service relocation at STA 8+50 marked on Sheet U-2. New alignment shifts water main 2 feet east for 60 LF section.",
+      13: "Redline: Added 2 fire hydrants per CO #005 at STA 11+00 and STA 13+50. Updated plan Sheets C-5 and C-6.",
+      15: "Redline: Final as-built measurements recorded STA 0+00 to STA 25+00. All valve boxes, hydrant locations, and fittings documented."
+    };
+    return plans[day] || "";
+  }
+
+  // Utility damage
+  function getUtilityDamageForDay(day) {
+    const damage = {
+      9: "Existing 2-inch gas service at STA 8+50 required relocation per FPL/TECO. No damage — proactive relocation coordinated with utility owner. Refer to CO #004."
+    };
+    return damage[day] || "";
+  }
+
+  // Equipment service notes
+  function getEquipServiceForDay(day) {
+    const service = {
+      2: "CAT 320 excavator — scheduled 250-hour service performed. Oil and filter change. Returned to operation at 1000 hrs.",
+      5: "Dewatering pump inspected and primed before rain event. All discharge hoses checked for integrity.",
+      7: "Vermeer D24x40 HDD rig — pre-operation safety inspection completed. All hydraulic connections verified. Drill fluid mixing system checked.",
+      10: "Wellpoint system — replaced 3 clogged filter screens. Pump capacity restored to 100%. Plate compactor fuel filter replaced.",
+      11: "All pumps ran continuously — checked oil levels and fuel at noon. Generator refueled at 1400 hrs. No issues.",
+      14: "Equipment staged for demobilization. Final inspection of CAT 320 — 312 hours accumulated this phase. Service log updated."
+    };
+    return service[day] || "";
+  }
+
+  // Pay items per day (format: array of arrays matching addPayItem input fields)
+  // [item#, description, unit, today_qty, to_date_qty, contract_qty]
+  function getPayItemsForDay(day) {
+    const cumulative12DIP = [180, 345, 500, 650, 800, 960, 1120, 1300, 1440, 1600, 1600, 1600, 1600, 1600, 1600];
+    const cumulative8PVC = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 180, 345, 730, 900];
+    const cumulativeHydrant = [0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 4, 6, 6];
+    const cumulativeValve = [0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3];
+    const cumulativeTrench = [120, 230, 340, 450, 550, 660, 780, 900, 1000, 1120, 1120, 1250, 1380, 1600, 1700];
+    const cumulativeTempPatch = [40, 80, 120, 160, 195, 235, 280, 325, 365, 410, 410, 460, 510, 600, 650];
+    const cumulativePermRest = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 80, 160, 220];
+    const cumulativeMOT = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    const i = day - 1;
+    const todayDIP = i === 0 ? cumulative12DIP[0] : cumulative12DIP[i] - cumulative12DIP[i-1];
+    const todayPVC = i === 0 ? cumulative8PVC[0] : cumulative8PVC[i] - cumulative8PVC[i-1];
+    const todayHyd = i === 0 ? cumulativeHydrant[0] : cumulativeHydrant[i] - cumulativeHydrant[i-1];
+    const todayValve = i === 0 ? cumulativeValve[0] : cumulativeValve[i] - cumulativeValve[i-1];
+    const todayTrench = i === 0 ? cumulativeTrench[0] : cumulativeTrench[i] - cumulativeTrench[i-1];
+    const todayPatch = i === 0 ? cumulativeTempPatch[0] : cumulativeTempPatch[i] - cumulativeTempPatch[i-1];
+    const todayRest = i === 0 ? cumulativePermRest[0] : cumulativePermRest[i] - cumulativePermRest[i-1];
+    return [
+      ["1", "12-inch DIP Water Main", "LF", String(todayDIP), String(cumulative12DIP[i]), "3200"],
+      ["2", "8-inch C900 PVC Water Main", "LF", String(todayPVC), String(cumulative8PVC[i]), "1800"],
+      ["3", "Fire Hydrant Assembly", "EA", String(todayHyd), String(cumulativeHydrant[i]), "12"],
+      ["4", "Gate Valve 8-inch", "EA", String(todayValve), String(cumulativeValve[i]), "15"],
+      ["5", "Trench Excavation & Backfill", "CY", String(todayTrench), String(cumulativeTrench[i]), "4200"],
+      ["6", "Temporary Asphalt Patch", "SY", String(todayPatch), String(cumulativeTempPatch[i]), "2100"],
+      ["7", "Permanent Restoration", "SY", String(todayRest), String(cumulativePermRest[i]), "2100"],
+      ["8", "MOT / Traffic Control", "DAY", "1", String(cumulativeMOT[i]), "120"]
+    ];
+  }
+
+  // Checklists per day - {osha: [checked item numbers], swppp: [...], dot: [...]}
+  function getChecklistsForDay(day) {
+    // Most days all safety items checked
+    const baseOsha = [1,2,3,5,6,7,8,9,10]; // item 4 (fall protection) only when elevated work
+    const baseSwppp = [1,2,4,6,7,8]; // item 3 (dewatering) only when pumping, 5 (turbidity) only near water
+    const baseDot = [1,2,3,4,6]; // item 5 (night lighting) only if night work
+
+    const checklists = {
+      osha: [...baseOsha],
+      swppp: [...baseSwppp],
+      dot: [...baseDot]
+    };
+
+    // Add dewatering compliance on days with active pumping
+    if ([5,7,8,9,10,11,12].includes(day)) {
+      checklists.swppp.push(3); // Dewatering discharge compliant
+    }
+    // Add turbidity barriers near waterways
+    if ([5,11].includes(day)) {
+      checklists.swppp.push(5);
+    }
+    // Add fall protection on HDD days (elevated platform)
+    if (day >= 7 && day <= 10) {
+      checklists.osha.push(4);
+    }
+    // Day 6 (safety incident) - toolbox talk was #10, already included
+    // Day 11 heavy rain - some items not applicable
+    if (day === 11) {
+      checklists.osha = [1,2,5,6,7,10]; // Minimal crew, no trench work
+      checklists.dot = [1,2,4,6]; // No flaggers needed
+    }
+
+    // Sort arrays for consistency
+    checklists.osha.sort((a,b) => a-b);
+    checklists.swppp.sort((a,b) => a-b);
+    checklists.dot.sort((a,b) => a-b);
+    return checklists;
+  }
+
   // Build all 15 daily reports as object keyed by ID
   const allDrafts = {};
   for (let day = 1; day <= 15; day++) {
@@ -4944,11 +5129,11 @@ document.addEventListener('click', (e) => {
       weather: parseWeather(weatherData[day - 1]),
       // Table data as arrays of arrays
       crew: getCrewForDay(day),
-      personnel: [],
+      personnel: getPersonnelForDay(day),
       ownedEquip: getOwnedEquipment(day),
       rentedEquip: getRentedEquipment(day),
       materials: getMaterialsForDay(day),
-      deliveryNotes: '',
+      deliveryNotes: getDeliveryNotesForDay(day),
       subs: getSubcontractorsForDay(day),
       visitors: getVisitorsForDay(day),
       // Text fields
@@ -4956,14 +5141,14 @@ document.addEventListener('click', (e) => {
       changeOrders: getChangeOrderForDay(day),
       lookAhead: getLookAheadForDay(day),
       testsPerformed: getTestsForDay(day),
-      photoNotes: '',
-      redlinePlan: '',
-      utilityDamage: '',
-      equipService: '',
+      photoNotes: getPhotoNotesForDay(day),
+      redlinePlan: getRedlinePlanForDay(day),
+      utilityDamage: getUtilityDamageForDay(day),
+      equipService: getEquipServiceForDay(day),
       safetyIssues: getSafetyIssuesForDay(day),
       // Complex data
-      payItems: [],
-      checklists: {},
+      payItems: getPayItemsForDay(day),
+      checklists: getChecklistsForDay(day),
       punchlist: [],
       userRole: 'Inspector',
       photos: {},
