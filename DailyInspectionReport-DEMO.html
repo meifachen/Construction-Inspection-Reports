@@ -4892,37 +4892,85 @@ document.addEventListener('click', (e) => {
     return crew;
   }
 
-  // Build all 15 daily reports
-  const allDrafts = [];
+  // Convert weather condition string to boolean checkboxes
+  function parseWeather(w) {
+    const cond = (w.condition || '').toLowerCase();
+    return {
+      sunny: cond.includes('sunny'),
+      cloudy: cond.includes('cloudy'),
+      clear: cond.includes('clear'),
+      overcast: cond.includes('overcast'),
+      windy: cond.includes('windy'),
+      lightRain: cond.includes('light rain'),
+      heavyRain: cond.includes('heavy rain'),
+      tempHigh: String(w.high || ''),
+      tempLow: String(w.low || ''),
+      precipitation: String(w.precip != null ? w.precip.toFixed(2) : '0.00'),
+      siteConditions: w.siteCondition || ''
+    };
+  }
+
+  // Get day-of-week name from date (use UTC to avoid timezone issues)
+  function getDayName(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getUTCDay()];
+  }
+
+  // Build all 15 daily reports as object keyed by ID
+  const allDrafts = {};
   for (let day = 1; day <= 15; day++) {
-    const draftDate = new Date(2026, 3, day); // April = month 3 (0-indexed)
-    const dateStr = draftDate.toISOString().split('T')[0];
+    // Use explicit date string to avoid timezone issues with toISOString()
+    const dateStr = '2026-04-' + String(day).padStart(2, '0');
     const contractDay = 164 + day;
+    const draftId = 'demo-report-' + day;
 
     const draft = {
-      id: 'demo-report-' + day,
-      createdAt: new Date(draftDate.getTime() - 8*3600000).toISOString(), // created at 8 PM previous day
-      lastModified: draftDate.toISOString(),
+      id: draftId,
+      timestamp: new Date(2026, 3, day, 16, 0, 0).toISOString(),
       status: day === 15 ? 'draft' : 'submitted',
-      projectInfo: { ...baseProjectInfo, contractDay: contractDay.toString() },
-      date: dateStr,
-      weather: weatherData[day - 1],
+      // Flat project fields (matches collectFormData)
+      projectName: baseProjectInfo.projectName,
+      contractor: baseProjectInfo.contractor,
+      inspector: baseProjectInfo.inspector,
+      superintendent: baseProjectInfo.superintendent,
+      employeeName: baseProjectInfo.employeeName,
+      location: baseProjectInfo.location,
+      reportDate: dateStr,
+      dayOfWeek: getDayName(dateStr),
+      contractDay: contractDay.toString(),
+      totalDays: baseProjectInfo.totalDays,
+      preparedBy: baseProjectInfo.preparedBy,
+      // Weather as boolean checkboxes + string values
+      weather: parseWeather(weatherData[day - 1]),
+      // Table data as arrays of arrays
       crew: getCrewForDay(day),
-      ownedEquipment: getOwnedEquipment(day),
-      rentedEquipment: getRentedEquipment(day),
+      personnel: [],
+      ownedEquip: getOwnedEquipment(day),
+      rentedEquip: getRentedEquipment(day),
       materials: getMaterialsForDay(day),
-      subcontractors: getSubcontractorsForDay(day),
+      deliveryNotes: '',
+      subs: getSubcontractorsForDay(day),
       visitors: getVisitorsForDay(day),
+      // Text fields
       workPerformed: getWorkNarrativeForDay(day),
-      safetyIssues: getSafetyIssuesForDay(day),
-      testsPerformed: getTestsForDay(day),
       changeOrders: getChangeOrderForDay(day),
       lookAhead: getLookAheadForDay(day),
-      photos: [],
+      testsPerformed: getTestsForDay(day),
+      photoNotes: '',
+      redlinePlan: '',
+      utilityDamage: '',
+      equipService: '',
+      safetyIssues: getSafetyIssuesForDay(day),
+      // Complex data
+      payItems: [],
+      checklists: {},
+      punchlist: [],
+      userRole: 'Inspector',
+      photos: {},
       signature: day < 15 ? "David Galeano, P.E." : ""
     };
 
-    allDrafts.push(draft);
+    allDrafts[draftId] = draft;
   }
 
   // Pay items
@@ -4962,7 +5010,7 @@ document.addEventListener('click', (e) => {
     {"name": "Anthropic", "apiKey": "demo-key-not-real", "model": "claude-3-haiku-20240307", "endpoint": "https://api.anthropic.com/v1/messages", "active": false}
   ];
 
-  // Save all to localStorage
+  // Save all to localStorage (object keyed by ID, matching saveDraft() format)
   localStorage.setItem('fieldreport_drafts', JSON.stringify(allDrafts));
   localStorage.setItem('fieldreport_pay_items', JSON.stringify(payItems));
   localStorage.setItem('fieldreport_settings', JSON.stringify(settings));
