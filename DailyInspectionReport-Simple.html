@@ -1,0 +1,3579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Daily Inspection Report - Lite</title>
+
+<!-- jsPDF + autoTable for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<!-- QR Code Generator for PDF reports -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+<style>
+:root {
+  --primary: #1a3a5c;
+  --primary-light: #2c5282;
+  --accent: #3182ce;
+  --accent-hover: #2b6cb0;
+  --success: #38a169;
+  --warning: #d69e2e;
+  --danger: #e53e3e;
+  --ai-accent: #7c3aed;
+  --bg: #f7fafc;
+  --card-bg: #ffffff;
+  --border: #e2e8f0;
+  --text: #2d3748;
+  --text-light: #718096;
+  --text-lighter: #a0aec0;
+  --input-bg: #f7fafc;
+  --shadow: 0 1px 3px rgba(0,0,0,0.12);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.15);
+  --radius: 8px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  padding-bottom: 80px;
+}
+
+.app-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white;
+  padding: 12px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-lg);
+}
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.app-header h1 {
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  flex: 1;
+}
+.header-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.header-btn:hover { background: rgba(255,255,255,0.25); }
+.ai-status-btn { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.ai-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ai-status-dot.connected { background: #10b981; }
+.ai-status-dot.untested { background: #f59e0b; }
+.ai-status-dot.error { background: #ef4444; }
+.ai-status-dot.unconfigured { background: #d1d5db; }
+
+.nav-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.nav-tabs::-webkit-scrollbar { display: none; }
+.nav-tab {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-light);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+}
+.nav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.nav-tab .tab-num {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-light);
+  font-size: 10px;
+  margin-right: 4px;
+}
+.nav-tab.active .tab-num {
+  background: var(--accent);
+  color: white;
+}
+.nav-tab.completed .tab-num {
+  background: var(--success);
+  color: white;
+}
+
+.page-section {
+  display: none;
+  padding: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+  animation: fadeIn 0.2s ease;
+}
+.page-section.active { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title .icon { font-size: 18px; }
+
+.form-group {
+  margin-bottom: 14px;
+}
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 15px;
+  background: var(--input-bg);
+  color: var(--text);
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(49,130,206,0.1);
+}
+.form-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.voice-input-wrap {
+  position: relative;
+}
+.voice-input-wrap .form-input,
+.voice-input-wrap .form-textarea {
+  padding-right: 72px;
+}
+.voice-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border);
+  color: var(--text-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+.voice-btn:hover { background: var(--accent); color: white; }
+.voice-btn.recording {
+  background: var(--danger);
+  color: white;
+  animation: pulse 1s infinite;
+}
+.voice-btn-textarea {
+  top: 12px;
+  transform: none;
+}
+.ai-cleanup-btn {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(124, 58, 237, 0.1);
+  color: var(--ai-accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: all 0.2s;
+}
+.ai-cleanup-btn:hover { background: var(--ai-accent); color: white; }
+.ai-cleanup-btn.loading {
+  animation: spin 1s linear infinite;
+}
+.ai-cleanup-btn-textarea {
+  top: 12px;
+  transform: none;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229,62,62,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(229,62,62,0); }
+}
+@keyframes spin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.checkbox-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--input-bg);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+}
+.list-item .item-text {
+  flex: 1;
+  font-size: 14px;
+}
+.remove-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(229,62,62,0.1);
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.remove-btn:hover { background: var(--danger); color: white; }
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  margin-top: 6px;
+}
+.add-btn:hover { border-color: var(--accent); background: rgba(49,130,206,0.05); }
+
+.crew-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.crew-table th {
+  background: var(--primary);
+  color: white;
+  padding: 8px 6px;
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  text-align: center;
+}
+.crew-table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.crew-table td input {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+  background: var(--input-bg);
+}
+.crew-table td input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.crew-table .name-col { text-align: left; min-width: 120px; }
+.crew-table .name-col input { text-align: left; }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-thumb .photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(229,62,62,0.9);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.capture-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-light);
+  cursor: pointer;
+  font-size: 12px;
+  gap: 4px;
+  min-height: 100px;
+}
+.capture-btn:hover { border-color: var(--accent); color: var(--accent); }
+.capture-btn .cam-icon { font-size: 28px; }
+
+.equip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.equip-table th {
+  background: var(--primary);
+  color: white;
+  padding: 8px 6px;
+  font-weight: 500;
+  font-size: 11px;
+  text-align: left;
+}
+.equip-table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.equip-table td input, .equip-table td select {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--input-bg);
+}
+
+.personnel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.personnel-table th {
+  background: var(--primary);
+  color: white;
+  padding: 6px 4px;
+  font-weight: 500;
+  font-size: 10px;
+  text-transform: uppercase;
+  text-align: center;
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  height: 80px;
+}
+.personnel-table th.horiz {
+  writing-mode: horizontal-tb;
+  height: auto;
+}
+.personnel-table td {
+  padding: 4px;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.personnel-table td input {
+  width: 100%;
+  padding: 2px;
+  border: 1px solid transparent;
+  text-align: center;
+  font-size: 12px;
+  background: transparent;
+}
+.personnel-table td input:focus {
+  border-color: var(--accent);
+  background: white;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 16px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+.bottom-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-light);
+  font-weight: 500;
+}
+.bottom-btn .btn-icon { font-size: 20px; }
+.bottom-btn.active { color: var(--accent); }
+.bottom-btn:hover { color: var(--accent); }
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary.btn-success { background: var(--success); }
+.btn-primary.btn-success:hover { background: #2f855a; }
+.btn-primary.btn-danger { background: var(--danger); }
+.btn-primary.btn-warning { background: var(--warning); color: var(--text); }
+
+.btn-block { width: 100%; justify-content: center; }
+.btn-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.home-screen {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  text-align: center;
+}
+.home-logo {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 20px 0 8px;
+}
+.home-sub {
+  color: var(--text-light);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+.home-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  transition: all 0.2s;
+}
+.home-btn:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.home-btn .hb-icon { font-size: 20px; }
+.home-btn.highlight {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.home-btn.highlight:hover { background: var(--accent-hover); }
+
+.report-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.report-list-item:hover { border-color: var(--accent); }
+.rli-info h4 { font-size: 14px; font-weight: 600; }
+.rli-info p { font-size: 12px; color: var(--text-light); }
+.rli-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.rli-badge.draft { background: #fefcbf; color: #975a16; }
+.rli-badge.submitted { background: #c6f6d5; color: #276749; }
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  justify-content: center;
+  align-items: flex-end;
+}
+.modal-overlay.open { display: flex; }
+.modal-content {
+  background: white;
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px 16px;
+  animation: slideUp 0.25s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.modal-header h3 { font-size: 17px; font-weight: 600; }
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.provider-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.provider-info { flex: 1; }
+.provider-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.provider-model {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-bottom: 6px;
+}
+.provider-key-masked {
+  font-size: 11px;
+  color: var(--text-lighter);
+  font-family: monospace;
+  word-break: break-all;
+}
+.provider-actions {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.test-btn {
+  padding: 6px 10px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.test-btn:hover { background: var(--accent-hover); }
+.test-btn.success {
+  background: var(--success);
+  color: white;
+}
+.test-btn.error {
+  background: var(--danger);
+  color: white;
+}
+
+.toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--primary);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 300;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.3s ease;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+
+.pdf-preview-frame {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sig-canvas {
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  width: 100%;
+  height: 120px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.section-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.ai-status-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 320px;
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 150;
+  overflow-y: auto;
+  padding: 16px;
+}
+.ai-status-panel.open {
+  transform: translateX(0);
+}
+.ai-status-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.ai-status-panel-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.close-panel-btn {
+  background: var(--border);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .form-row { grid-template-columns: 1fr; }
+  .form-row-3 { grid-template-columns: 1fr 1fr; }
+  .crew-table { font-size: 11px; }
+  .crew-table th { padding: 6px 3px; font-size: 9px; }
+  .ai-status-panel { width: 100%; }
+}
+
+.offline-badge {
+  background: var(--warning);
+  color: var(--text);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: none;
+  font-weight: 600;
+}
+body.offline .offline-badge {
+  display: inline-block;
+}
+
+.role-badge {
+  background: var(--ai-accent);
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.annotation-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  z-index: 1000;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.annotation-overlay.open {
+  display: flex;
+}
+.annotation-canvas {
+  max-width: 90vw;
+  max-height: 70vh;
+  background: white;
+  border: 2px solid var(--border);
+}
+.annotation-toolbar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.annotation-toolbar button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.annotation-toolbar button.active {
+  background: var(--primary);
+  color: white;
+}
+
+.dashboard-view {
+  display: none;
+}
+.dashboard-view.active {
+  display: block;
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+.kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.kpi-label {
+  font-size: 11px;
+  color: var(--text-light);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.chart-container {
+  position: relative;
+  height: 300px;
+  margin-bottom: 24px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.checklist-section {
+  margin-top: 16px;
+}
+.checklist-title {
+  font-weight: 600;
+  padding: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checklist-title::after {
+  content: '▼';
+  font-size: 10px;
+}
+.checklist-title.collapsed::after {
+  content: '▶';
+}
+.checklist-content {
+  padding: 12px;
+  border-left: 2px solid var(--border);
+}
+.checklist-content.hidden {
+  display: none;
+}
+.checklist-item {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+.checklist-item input[type="checkbox"] {
+  margin-top: 3px;
+  cursor: pointer;
+}
+.checklist-item label {
+  flex: 1;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.safety-score-display {
+  background: linear-gradient(135deg, var(--ai-accent) 0%, var(--accent) 100%);
+  color: white;
+  padding: 12px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.quantity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.quantity-table th, .quantity-table td {
+  padding: 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.quantity-table th {
+  background: var(--border);
+  font-weight: 600;
+}
+.quantity-table input {
+  width: 100%;
+  border: none;
+  padding: 4px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.punchlist-item {
+  background: var(--border);
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  border-left: 4px solid var(--accent);
+}
+.punchlist-item.high {
+  border-left-color: var(--danger);
+}
+.punchlist-item.medium {
+  border-left-color: var(--warning);
+}
+.punchlist-item.low {
+  border-left-color: var(--text-light);
+}
+.punchlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.punchlist-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  color: white;
+}
+.punchlist-status.open {
+  background: var(--danger);
+}
+.punchlist-status.in-progress {
+  background: var(--warning);
+}
+.punchlist-status.closed {
+  background: var(--success);
+}
+
+@media print {
+  .app-header, .nav-tabs, .bottom-nav, .voice-btn, .ai-cleanup-btn, .add-btn, .remove-btn, .capture-btn { display: none !important; }
+  .page-section { display: block !important; }
+  body { padding-bottom: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== APP HEADER ==================== -->
+<div class="app-header">
+  <div class="header-row">
+    <button class="header-btn" onclick="goHome()">Home</button>
+    <h1>Daily Construction Inspection Report<span class="offline-badge">OFFLINE</span><span class="role-badge" id="roleBadge" style="display:none;"></span></h1>
+    <div style="display:flex; gap:8px;">
+      <button class="header-btn ai-status-btn" onclick="toggleAIStatusPanel()" title="AI Status">
+        <span class="ai-status-dot unconfigured" id="aiStatusDot"></span>
+        <span>AI</span>
+      </button>
+      
+    </div>
+  </div>
+</div>
+
+<!-- ==================== HOME SCREEN ==================== -->
+<div id="homeScreen" class="home-screen">
+  <div class="home-logo">FieldReport Pro</div>
+  <div class="home-sub">Daily Construction Inspection Reports</div>
+
+  <button class="home-btn highlight" onclick="newReport()">
+    <span>New Daily Report</span>
+    <span class="hb-icon">></span>
+  </button>
+  
+  <button class="home-btn" onclick="showSubmitted()">
+    <span>Submitted Reports</span>
+    <span class="hb-icon">></span>
+  </button>
+
+  <div id="submittedList" style="display:none; margin-top:16px; text-align:left;">
+    <h3 style="margin-bottom:10px;">Submitted Reports</h3>
+    <div id="submittedContainer"></div>
+    <button class="btn-primary btn-block" style="margin-top:12px" onclick="document.getElementById('submittedList').style.display='none'">Close</button>
+  </div>
+</div>
+
+<!-- ==================== REPORT FORM ==================== -->
+<div id="reportForm" style="display:none;">
+
+  <!-- Tab Navigation -->
+  <div class="nav-tabs" id="navTabs">
+    <button class="nav-tab active" onclick="showTab(0)"><span class="tab-num">1</span>Project</button>
+    <button class="nav-tab" onclick="showTab(1)"><span class="tab-num">2</span>Crew</button>
+    <button class="nav-tab" onclick="showTab(2)"><span class="tab-num">3</span>Equipment</button>
+    <button class="nav-tab" onclick="showTab(3)"><span class="tab-num">4</span>Materials</button>
+    <button class="nav-tab" onclick="showTab(4)"><span class="tab-num">5</span>Subs</button>
+    <button class="nav-tab" onclick="showTab(5)"><span class="tab-num">6</span>Work</button>
+    <button class="nav-tab" onclick="showTab(6)"><span class="tab-num">7</span>Photos</button>
+    <button class="nav-tab" onclick="showTab(7)"><span class="tab-num">8</span>Issues</button>
+    <button class="nav-tab" onclick="showTab(8)"><span class="tab-num">9</span>Sign</button>
+  </div>
+
+  <!-- ========== TAB 1: PROJECT INFO ========== -->
+  <div class="page-section active" id="tab0">
+    <div class="card">
+      <button class="btn-primary" onclick="smartDictate()" style="background:var(--ai-accent);width:100%;margin-bottom:12px;">&#127908; Smart Dictate — Speak freely, AI fills the fields</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">Info</span> Project Information</div>
+      <div class="form-group">
+        <label class="form-label">Project Name / No.</label>
+        <div class="voice-input-wrap">
+          <input type="text" class="form-input" id="projectName" placeholder="e.g. Washington Park Phase 1 (11042)">
+          <button class="ai-cleanup-btn" onclick="aiCleanupField('projectName')" title="AI Cleanup">✨</button>
+          <button class="voice-btn" onclick="voiceInput('projectName')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contractor</label>
+          <div class="voice-input-wrap">
+            <input type="text" class="form-input" id="contractor" placeholder="Contractor name">
+            <button class="ai-cleanup-btn" onclick="aiCleanupField('contractor')" title="AI Cleanup">✨</button>
+            <button class="voice-btn" onclick="voiceInput('contractor')" title="Voice Input">🎤</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Inspector</label>
+          <div class="voice-input-wrap">
+            <input type="text" class="form-input" id="inspector" placeholder="Inspector name">
+            <button class="ai-cleanup-btn" onclick="aiCleanupField('inspector')" title="AI Cleanup">✨</button>
+            <button class="voice-btn" onclick="voiceInput('inspector')" title="Voice Input">🎤</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Superintendent</label>
+          <div class="voice-input-wrap">
+            <input type="text" class="form-input" id="superintendent" placeholder="Superintendent name">
+            <button class="ai-cleanup-btn" onclick="aiCleanupField('superintendent')" title="AI Cleanup">✨</button>
+            <button class="voice-btn" onclick="voiceInput('superintendent')" title="Voice Input">🎤</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Employee Name</label>
+          <div class="voice-input-wrap">
+            <input type="text" class="form-input" id="employeeName" placeholder="Report preparer">
+            <button class="ai-cleanup-btn" onclick="aiCleanupField('employeeName')" title="AI Cleanup">✨</button>
+            <button class="voice-btn" onclick="voiceInput('employeeName')" title="Voice Input">🎤</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location</label>
+        <div class="voice-input-wrap">
+          <input type="text" class="form-input" id="location" placeholder="Project location / address">
+          <button class="ai-cleanup-btn" onclick="aiCleanupField('location')" title="AI Cleanup">✨</button>
+          <button class="voice-btn" onclick="voiceInput('location')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">Date</span> Date & Contract</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="reportDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Day of Week</label>
+          <input type="text" class="form-input" id="dayOfWeek" readonly>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">Contract Day</label>
+          <input type="number" class="form-input" id="contractDay" placeholder="#">
+        </div>
+        <div class="form-group">
+          <label class="form-label">of Total Days</label>
+          <input type="number" class="form-input" id="totalDays" placeholder="#">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Days Remaining</label>
+          <input type="number" class="form-input" id="daysRemaining" readonly>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">Weather</span> Weather Conditions</div>
+      <div class="checkbox-group" style="margin-bottom:12px;">
+        <label class="checkbox-item"><input type="checkbox" id="wxSunny"> Sunny</label>
+        <label class="checkbox-item"><input type="checkbox" id="wxCloudy"> Cloudy</label>
+        <label class="checkbox-item"><input type="checkbox" id="wxClear"> Clear</label>
+        <label class="checkbox-item"><input type="checkbox" id="wxOvercast"> Overcast</label>
+        <label class="checkbox-item"><input type="checkbox" id="wxWindy"> Windy</label>
+        <label class="checkbox-item"><input type="checkbox" id="wxLightRain"> Light Rain</label>
+        <label class="checkbox-item"><input type="checkbox" id="wxHeavyRain"> Heavy Rain</label>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">Temp High (F)</label>
+          <input type="number" class="form-input" id="tempHigh" placeholder="F">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Temp Low (F)</label>
+          <input type="number" class="form-input" id="tempLow" placeholder="F">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precipitation (in)</label>
+          <input type="number" class="form-input" id="precipitation" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Site Conditions</label>
+        <div class="voice-input-wrap">
+          <input type="text" class="form-input" id="siteConditions" placeholder="e.g. Dry, Muddy, Wet">
+          <button class="ai-cleanup-btn" onclick="aiCleanupField('siteConditions')" title="AI Cleanup">✨</button>
+          <button class="voice-btn" onclick="voiceInput('siteConditions')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-group" style="justify-content:flex-end;">
+      <button class="btn-primary" onclick="showTab(1)">Next: Crew ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 2: CREW / PERSONNEL ========== -->
+  <div class="page-section" id="tab1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-title">Crew / Employee Time</div>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table class="crew-table" id="crewTable">
+          <thead>
+            <tr>
+              <th class="name-col">Employee</th>
+              <th>Trade</th>
+              <th>Clock In</th>
+              <th>Clock Out</th>
+              <th>Lunch</th>
+              <th>Hours</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="crewBody">
+          </tbody>
+        </table>
+      </div>
+      <button class="add-btn" onclick="addCrewRow()">+ Add Employee</button>
+    </div>
+
+    
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(0)">< Back</button>
+      <button class="btn-primary" onclick="showTab(2)">Next: Equipment ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 3: EQUIPMENT ========== -->
+  <div class="page-section" id="tab2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div class="section-title">Owned Equipment</div>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table class="equip-table" id="ownedEquipTable">
+          <thead>
+            <tr><th>Equipment</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="ownedEquipBody"></tbody>
+        </table>
+      </div>
+      <button class="add-btn" onclick="addEquipRow('ownedEquipBody')">+ Add Owned Equipment</button>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">3</div>
+      <div class="section-title">Rented Equipment</div>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table class="equip-table" id="rentedEquipTable">
+          <thead>
+            <tr><th>Equipment</th><th>Vendor</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="rentedEquipBody"></tbody>
+        </table>
+      </div>
+      <button class="add-btn" onclick="addRentedEquipRow('rentedEquipBody')">+ Add Rented Equipment</button>
+    </div>
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(1)">< Back</button>
+      <button class="btn-primary" onclick="showTab(3)">Next: Materials ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 4: MATERIALS ========== -->
+  <div class="page-section" id="tab3">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-title">Material Used</div>
+    </div>
+    <div class="card">
+      <div id="materialsList"></div>
+      <div class="form-row" style="margin-top:6px;">
+        <div class="voice-input-wrap">
+          <input type="text" class="form-input" id="newMaterial" placeholder="Material description" list="materialsList-datalist">
+          <datalist id="materialsList-datalist">
+            <option value="6 DIP"></option>
+            <option value="8 DIP"></option>
+            <option value="10 DIP"></option>
+            <option value="12 DIP"></option>
+            <option value="16 DIP"></option>
+            <option value="6 PVC"></option>
+            <option value="8 PVC"></option>
+            <option value="10 PVC"></option>
+            <option value="12 PVC"></option>
+            <option value="15 RCP"></option>
+            <option value="18 RCP"></option>
+            <option value="24 RCP"></option>
+            <option value="36 RCP"></option>
+            <option value="HDPE (specify size)"></option>
+            <option value="Gate Valve"></option>
+            <option value="Butterfly Valve"></option>
+            <option value="Fire Hydrant"></option>
+            <option value="Tee"></option>
+            <option value="Bend"></option>
+            <option value="Reducer"></option>
+            <option value="Coupling"></option>
+            <option value="MJ Fittings"></option>
+            <option value="Saddle Tap"></option>
+            <option value="Crushed Limestone Base"></option>
+            <option value="Limerock"></option>
+            <option value="Select Fill"></option>
+            <option value="Flowable Fill"></option>
+            <option value="Structural Fill"></option>
+            <option value="Washed Rock"></option>
+            <option value="#57 Stone"></option>
+            <option value="French Drain Aggregate"></option>
+            <option value="Ready-Mix Concrete 3000 PSI"></option>
+            <option value="Ready-Mix Concrete 4000 PSI"></option>
+            <option value="Precast Manhole Sections"></option>
+            <option value="Precast Inlet"></option>
+            <option value="Rebar (#4)"></option>
+            <option value="Rebar (#5)"></option>
+            <option value="Concrete Block"></option>
+            <option value="Asphalt (Type S-III)"></option>
+            <option value="Asphalt (Type S-I)"></option>
+            <option value="Tack Coat"></option>
+            <option value="Prime Coat"></option>
+            <option value="Emulsion"></option>
+            <option value="Silt Fence"></option>
+            <option value="Turbidity Barrier"></option>
+            <option value="Geotextile Fabric"></option>
+            <option value="Polyethylene Sheeting"></option>
+            <option value="Tracer Wire"></option>
+            <option value="Detectable Warning Tape"></option>
+            <option value="Thrust Block"></option>
+          </datalist>
+          <button class="ai-cleanup-btn" onclick="aiCleanupField('newMaterial')" title="AI Cleanup">✨</button>
+          <button class="voice-btn" onclick="voiceInput('newMaterial')" title="Voice Input">🎤</button>
+        </div>
+        <button class="btn-primary" onclick="addListItem('materialsList','newMaterial')">+ Add</button>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">5</div>
+      <div class="section-title">Material Delivery Tickets</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Delivery Notes</label>
+        <div class="voice-input-wrap">
+          <textarea class="form-textarea" id="deliveryNotes" placeholder="Delivery ticket details, quantities, vendors..."></textarea>
+          <button class="ai-cleanup-btn ai-cleanup-btn-textarea" onclick="aiCleanupField('deliveryNotes')" title="AI Cleanup">✨</button>
+          <button class="voice-btn voice-btn-textarea" onclick="voiceInput('deliveryNotes')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Delivery Ticket Photos</label>
+        <div class="photo-grid" id="deliveryPhotos"></div>
+        <input type="file" accept="image/*" capture="environment" multiple style="display:none" id="deliveryPhotoInput" onchange="handlePhotoUpload(event,'deliveryPhotos')">
+        <button class="add-btn" onclick="document.getElementById('deliveryPhotoInput').click()">Photo: Delivery Ticket</button>
+      </div>
+    </div>
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(2)">< Back</button>
+      <button class="btn-primary" onclick="showTab(4)">Next: Subs ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 5: SUBCONTRACTORS ========== -->
+  <div class="page-section" id="tab4">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div class="section-title">Subcontractors</div>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table class="equip-table" id="subsTable">
+          <thead>
+            <tr><th>Subcontractor</th><th>Work Description</th><th># Workers</th><th></th></tr>
+          </thead>
+          <tbody id="subsBody"></tbody>
+        </table>
+      </div>
+      <button class="add-btn" onclick="addSubRow()">+ Add Subcontractor</button>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">7</div>
+      <div class="section-title">Visitors</div>
+    </div>
+    <div class="card">
+      <div id="visitorsList"></div>
+      <div class="form-row" style="margin-top:6px;">
+        <div class="voice-input-wrap">
+          <input type="text" class="form-input" id="newVisitor" placeholder="Visitor name & affiliation">
+          <button class="ai-cleanup-btn" onclick="aiCleanupField('newVisitor')" title="AI Cleanup">✨</button>
+          <button class="voice-btn" onclick="voiceInput('newVisitor')" title="Voice Input">🎤</button>
+        </div>
+        <button class="btn-primary" onclick="addListItem('visitorsList','newVisitor')">+ Add</button>
+      </div>
+    </div>
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(3)">< Back</button>
+      <button class="btn-primary" onclick="showTab(5)">Next: Work ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 6: WORK PERFORMED ========== -->
+  <div class="page-section" id="tab5">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <div class="section-title">Work Performed Today</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Narrative: Detail from start to stop of each activity (STA)</label>
+        <div class="voice-input-wrap">
+          <textarea class="form-textarea" id="workPerformed" style="min-height:160px;" placeholder="Describe all work activities..."></textarea>
+          <button class="ai-cleanup-btn ai-cleanup-btn-textarea" onclick="aiCleanupField('workPerformed')" title="AI Cleanup">✨</button>
+          <button class="voice-btn voice-btn-textarea" onclick="voiceInput('workPerformed')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">12</div>
+      <div class="section-title">Change Orders / Additional Work</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Record work not shown on plans or M&P. Include start/finish time.</label>
+        <div class="voice-input-wrap">
+          <textarea class="form-textarea" id="changeOrders" placeholder="Change order details..."></textarea>
+          <button class="ai-cleanup-btn ai-cleanup-btn-textarea" onclick="aiCleanupField('changeOrders')" title="AI Cleanup">✨</button>
+          <button class="voice-btn voice-btn-textarea" onclick="voiceInput('changeOrders')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">14</div>
+      <div class="section-title">2-Week Look Ahead</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Future work activities and material deliveries</label>
+        <div class="voice-input-wrap">
+          <textarea class="form-textarea" id="lookAhead" placeholder="Upcoming work plans..."></textarea>
+          <button class="ai-cleanup-btn ai-cleanup-btn-textarea" onclick="aiCleanupField('lookAhead')" title="AI Cleanup">✨</button>
+          <button class="voice-btn voice-btn-textarea" onclick="voiceInput('lookAhead')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">T</div>
+      <div class="section-title">Tests Performed</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <div class="voice-input-wrap">
+          <textarea class="form-textarea" id="testsPerformed" placeholder="Describe any tests performed..."></textarea>
+          <button class="ai-cleanup-btn ai-cleanup-btn-textarea" onclick="aiCleanupField('testsPerformed')" title="AI Cleanup">✨</button>
+          <button class="voice-btn voice-btn-textarea" onclick="voiceInput('testsPerformed')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">$</div>
+      <div class="section-title">Daily Quantities / Pay Items</div>
+    </div>
+    <div class="card">
+      <table class="quantity-table">
+        <thead>
+          <tr>
+            <th>Pay Item #</th>
+            <th>Description</th>
+            <th>Unit</th>
+            <th>Qty Today</th>
+            <th>Qty to Date</th>
+            <th>Contract Qty</th>
+            <th>% Complete</th>
+          </tr>
+        </thead>
+        <tbody id="payItemsBody"></tbody>
+      </table>
+      <button class="add-btn" onclick="addPayItem()" style="margin-top:8px;">+ Add Pay Item</button>
+      <button class="btn-primary" onclick="configurPayItems()" style="background:var(--text-light);margin-top:8px;">⚙ Configure Default Items</button>
+    </div>
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(4)">< Back</button>
+      <button class="btn-primary" onclick="showTab(6)">Next: Photos ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 7: PHOTOS ========== -->
+  <div class="page-section" id="tab6">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <div class="section-title">Site Photo Documentation</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Pre, During & Post Work Photos</label>
+        <div class="photo-grid" id="sitePhotos"></div>
+        <input type="file" accept="image/*" capture="environment" multiple style="display:none" id="sitePhotoInput" onchange="handlePhotoUpload(event,'sitePhotos')">
+        <button class="add-btn" onclick="document.getElementById('sitePhotoInput').click()">Photo: Capture/Upload</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Photo Notes</label>
+        <div class="voice-input-wrap">
+          <textarea class="form-textarea" id="photoNotes" placeholder="Description of photos taken..."></textarea>
+          <button class="ai-cleanup-btn ai-cleanup-btn-textarea" onclick="aiCleanupField('photoNotes')" title="AI Cleanup">✨</button>
+          <button class="voice-btn voice-btn-textarea" onclick="voiceInput('photoNotes')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    
+
+    
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(5)">< Back</button>
+      <button class="btn-primary" onclick="showTab(7)">Next: Issues ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 8: ISSUES ========== -->
+  <div class="page-section" id="tab7">
+    
+
+    
+
+    
+
+      <div class="checklist-section">
+        <div class="checklist-title" onclick="toggleChecklist('oshaChecklist')">OSHA Daily Safety</div>
+        <div class="checklist-content" id="oshaChecklist">
+          <div class="checklist-item"><input type="checkbox" id="osha1" class="osha-item"><label for="osha1">Hard hats worn on site</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha2" class="osha-item"><label for="osha2">Safety vests visible</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha3" class="osha-item"><label for="osha3">Trench protection in place (>5ft)</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha4" class="osha-item"><label for="osha4">Fall protection in place (>6ft)</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha5" class="osha-item"><label for="osha5">Proper flagging/MOT</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha6" class="osha-item"><label for="osha6">First aid kit accessible</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha7" class="osha-item"><label for="osha7">MSDS/SDS sheets available</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha8" class="osha-item"><label for="osha8">Housekeeping satisfactory</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha9" class="osha-item"><label for="osha9">Equipment inspected</label></div>
+          <div class="checklist-item"><input type="checkbox" id="osha10" class="osha-item"><label for="osha10">Toolbox talk conducted</label></div>
+        </div>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-title" onclick="toggleChecklist('swpppChecklist')">SWPPP Compliance</div>
+        <div class="checklist-content hidden" id="swpppChecklist">
+          <div class="checklist-item"><input type="checkbox" id="swppp1" class="swppp-item"><label for="swppp1">Silt fence intact</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp2" class="swppp-item"><label for="swppp2">Inlet protection in place</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp3" class="swppp-item"><label for="swppp3">Dewatering discharge compliant</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp4" class="swppp-item"><label for="swppp4">Stabilized construction entrance</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp5" class="swppp-item"><label for="swppp5">Turbidity barriers intact</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp6" class="swppp-item"><label for="swppp6">Dust control measures active</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp7" class="swppp-item"><label for="swppp7">Material storage protected</label></div>
+          <div class="checklist-item"><input type="checkbox" id="swppp8" class="swppp-item"><label for="swppp8">BMP inspection completed</label></div>
+        </div>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-title" onclick="toggleChecklist('dotChecklist')">DOT/FDOT Compliance</div>
+        <div class="checklist-content hidden" id="dotChecklist">
+          <div class="checklist-item"><input type="checkbox" id="dot1" class="dot-item"><label for="dot1">MOT plan followed</label></div>
+          <div class="checklist-item"><input type="checkbox" id="dot2" class="dot-item"><label for="dot2">Arrow board operational</label></div>
+          <div class="checklist-item"><input type="checkbox" id="dot3" class="dot-item"><label for="dot3">Flaggers certified</label></div>
+          <div class="checklist-item"><input type="checkbox" id="dot4" class="dot-item"><label for="dot4">Lane closures per permit</label></div>
+          <div class="checklist-item"><input type="checkbox" id="dot5" class="dot-item"><label for="dot5">Night lighting adequate</label></div>
+          <div class="checklist-item"><input type="checkbox" id="dot6" class="dot-item"><label for="dot6">Speed limit signs posted</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-num">P</div>
+      <div class="section-title">Punch List / Non-Conformances</div>
+    </div>
+    <div class="card">
+      <div id="punchlistContainer"></div>
+      <button class="add-btn" onclick="addPunchListItem()">+ Add Punch List Item</button>
+    </div>
+
+    <div class="btn-group" style="justify-content:space-between;">
+      <button class="btn-primary" style="background:var(--text-light)" onclick="showTab(6)">< Back</button>
+      <button class="btn-primary" onclick="showTab(8)">Next: Sign & Submit ></button>
+    </div>
+  </div>
+
+  <!-- ========== TAB 9: SIGN & SUBMIT ========== -->
+  <div class="page-section" id="tab8">
+    <div class="section-header">
+      <div class="section-num">Check</div>
+      <div class="section-title">Review, Sign & Submit</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">Sig</span> Signature</div>
+      <div class="form-group">
+        <label class="form-label">Prepared By</label>
+        <div class="voice-input-wrap">
+          <input type="text" class="form-input" id="preparedBy" placeholder="Your name">
+          <button class="ai-cleanup-btn" onclick="aiCleanupField('preparedBy')" title="AI Cleanup">✨</button>
+          <button class="voice-btn" onclick="voiceInput('preparedBy')" title="Voice Input">🎤</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Draw Signature Below</label>
+        <canvas class="sig-canvas" id="sigCanvas"></canvas>
+        <button class="add-btn" onclick="clearSignature()" style="margin-top:4px;">Clear Signature</button>
+      </div>
+    </div>
+
+    <div class="card" style="text-align:center;">
+      <button class="btn-primary btn-block" style="background:var(--ai-accent); margin-bottom:8px;" onclick="aiCleanupFullReport()">
+        ✨ AI Clean Up Full Report
+      </button>
+      <button class="btn-primary btn-block btn-success" onclick="saveDraft()" style="margin-bottom:8px;">
+        Save Draft
+      </button>
+      <button class="btn-primary btn-block" onclick="generatePDF()" style="margin-bottom:8px;">
+        Preview & Generate PDF
+      </button>
+      <button class="btn-primary btn-block" onclick="sharePDF()" style="margin-bottom:8px;background:var(--accent);">
+        &#128229; Share Report
+      </button>
+      <button class="btn-primary btn-block btn-warning" onclick="submitReport()">
+        Submit Report
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== ANNOTATION OVERLAY ==================== -->
+<div id="annotationOverlay" class="annotation-overlay">
+  <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+  <div class="annotation-toolbar">
+    <button onclick="setAnnotationTool('draw')" class="active">Draw</button>
+    <button onclick="setAnnotationTool('arrow')">Arrow</button>
+    <button onclick="setAnnotationTool('text')">Text</button>
+    <button onclick="setAnnotationTool('circle')">Circle</button>
+    <button onclick="undoAnnotation()">Undo</button>
+    <button onclick="saveAnnotation()" style="background:var(--success);color:white;">Save</button>
+    <button onclick="cancelAnnotation()" style="background:var(--danger);color:white;">Cancel</button>
+  </div>
+</div>
+
+<!-- ==================== SETTINGS MODAL ==================== -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Settings & Defaults</h3>
+      <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">General Settings</h4>
+      <div class="form-group">
+        <label class="form-label">Default Company Name</label>
+        <input type="text" class="form-input" id="settCompany" placeholder="Your company">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Inspector Name</label>
+        <input type="text" class="form-input" id="settInspector" placeholder="Default inspector">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Project Name / No.</label>
+        <input type="text" class="form-input" id="settProject" placeholder="Default project">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Company Logo URL (optional)</label>
+        <input type="text" class="form-input" id="settLogo" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Owner / Client</label>
+        <input type="text" class="form-input" id="settOwner" placeholder="e.g. City of Hollywood">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Engineer</label>
+        <input type="text" class="form-input" id="settEngineer" placeholder="e.g. Tetra Tech, Inc.">
+      </div>
+      <button class="btn-primary btn-block" onclick="saveSettings()">Save Settings</button>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+
+    <div style="margin-bottom:24px;">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">User Role</h4>
+      <select class="form-input" id="userRoleSelect" onchange="localStorage.setItem('fieldreport_user_role',this.value);applyRolePermissions();">
+        <option value="Inspector">Inspector (Full Access)</option>
+        <option value="Superintendent">Superintendent (View/Edit)</option>
+        <option value="Foreman">Foreman (Limited Access)</option>
+        <option value="PM">Project Manager (Read-Only)</option>
+      </select>
+    </div>
+
+    <div>
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">AI Providers</h4>
+      <div id="aiProvidersContainer" style="margin-bottom:12px;"></div>
+      <button class="btn-primary btn-block" onclick="addNewAIProvider()" style="background:var(--ai-accent);">+ Add AI Provider</button>
+    </div>
+  </div>
+</div>
+
+<!-- Monthly Summary Modal removed in Lite version -->
+
+<!-- ==================== AI STATUS PANEL ==================== -->
+<div class="ai-status-panel" id="aiStatusPanel">
+  <div class="ai-status-panel-header">
+    <h3>AI Providers</h3>
+    <button class="close-panel-btn" onclick="toggleAIStatusPanel()">&times;</button>
+  </div>
+  <div id="aiStatusContent"></div>
+</div>
+
+<!-- ==================== TOAST ==================== -->
+<div class="toast" id="toast"></div>
+
+<!-- ==================== BOTTOM NAV ==================== -->
+<div class="bottom-nav">
+  <button class="bottom-btn active" onclick="goHome()">
+    <span class="btn-icon">Home</span> Home
+  </button>
+  <button class="bottom-btn" onclick="saveDraft()">
+    <span class="btn-icon">Save</span> Save
+  </button>
+  <button class="bottom-btn" onclick="generatePDF()">
+    <span class="btn-icon">PDF</span> PDF
+  </button>
+  <button class="bottom-btn" onclick="openSettingsModal()">
+    <span class="btn-icon">Set</span> Settings
+  </button>
+</div>
+
+<script>
+// ======================== STATE ========================
+let currentReportId = null;
+let photoData = { sitePhotos: [], deliveryPhotos: [] };
+let signatureData = null;
+let aiProviders = [];
+
+// ======================== INIT ========================
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  const dateStr = today.toISOString().split('T')[0];
+  document.getElementById('reportDate').value = dateStr;
+  updateDayOfWeek();
+
+  document.getElementById('reportDate').addEventListener('change', updateDayOfWeek);
+  document.getElementById('contractDay').addEventListener('input', calcRemaining);
+  document.getElementById('totalDays').addEventListener('input', calcRemaining);
+
+  loadSettings();
+  loadAIProviders();
+  updateAIStatus();
+  initSignature();
+  initServiceWorker();
+  applyRolePermissions();
+  loadPunchListFromStorage();
+
+  setInterval(() => {
+    if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
+      autoSave();
+    }
+  }, 60000);
+});
+
+function updateDayOfWeek() {
+  const d = document.getElementById('reportDate').value;
+  if (d) {
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dt = new Date(d + 'T12:00:00');
+    document.getElementById('dayOfWeek').value = days[dt.getDay()];
+  }
+}
+
+function calcRemaining() {
+  const cd = parseInt(document.getElementById('contractDay').value) || 0;
+  const td = parseInt(document.getElementById('totalDays').value) || 0;
+  document.getElementById('daysRemaining').value = td > 0 ? td - cd : '';
+}
+
+// ======================== AI PROVIDERS ========================
+function loadAIProviders() {
+  try {
+    aiProviders = JSON.parse(localStorage.getItem('fieldreport_ai_providers') || '[]');
+  } catch(e) {
+    aiProviders = [];
+  }
+  // Seed default NVIDIA providers on first use
+  if (aiProviders.length === 0) {
+    aiProviders = getDefaultAIProviders();
+    saveAIProviders();
+  }
+  renderAIProviders();
+}
+
+function saveAIProviders() {
+  localStorage.setItem('fieldreport_ai_providers', JSON.stringify(aiProviders));
+  updateAIStatus();
+}
+
+function updateAIStatus() {
+  const dot = document.getElementById('aiStatusDot');
+  if (aiProviders.length === 0) {
+    dot.className = 'ai-status-dot unconfigured';
+    return;
+  }
+  
+  let hasConnected = false;
+  let hasError = false;
+  let hasUntested = false;
+  
+  for (const p of aiProviders) {
+    if (p.testStatus === 'success') hasConnected = true;
+    else if (p.testStatus === 'error') hasError = true;
+    else hasUntested = true;
+  }
+  
+  if (hasConnected) dot.className = 'ai-status-dot connected';
+  else if (hasError) dot.className = 'ai-status-dot error';
+  else if (hasUntested) dot.className = 'ai-status-dot untested';
+  else dot.className = 'ai-status-dot unconfigured';
+  
+  renderAIStatusPanel();
+}
+
+function renderAIProviders() {
+  const container = document.getElementById('aiProvidersContainer');
+  if (!container) return;
+  
+  container.innerHTML = aiProviders.map((p, idx) => `
+    <div class="provider-card">
+      <div class="provider-info">
+        <div class="provider-name">${escapeHtml(p.name)}</div>
+        <div class="provider-model">${escapeHtml(p.model)}</div>
+        <div class="provider-key-masked">Key: ${p.apiKey.substring(0,8)}...${p.apiKey.substring(p.apiKey.length-4)}</div>
+      </div>
+      <div class="provider-actions">
+        <button class="test-btn ${p.testStatus === 'success' ? 'success' : p.testStatus === 'error' ? 'error' : ''}" onclick="testAIProvider(${idx})">Test</button>
+        <button class="remove-btn" onclick="removeAIProvider(${idx})">&times;</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addNewAIProvider() {
+  const name = prompt('Provider name (e.g. OpenAI, Claude):');
+  if (!name) return;
+  const apiKey = prompt('API Key:');
+  if (!apiKey) return;
+  const model = prompt('Model (e.g. gpt-4o-mini):');
+  if (!model) return;
+  const endpoint = prompt('Endpoint URL (optional):') || '';
+  
+  aiProviders.push({
+    name: name,
+    apiKey: apiKey,
+    model: model,
+    endpoint: endpoint || getDefaultEndpoint(name),
+    testStatus: 'untested'
+  });
+  
+  saveAIProviders();
+  renderAIProviders();
+  showToast('AI Provider added!', 'success');
+}
+
+function getDefaultEndpoint(name) {
+  const n = name.toLowerCase();
+  if (n.includes('openai')) return 'https://api.openai.com/v1/chat/completions';
+  if (n.includes('claude') || n.includes('anthropic')) return 'https://api.anthropic.com/v1/messages';
+  if (n.includes('google') || n.includes('gemini')) return 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  if (n.includes('nvidia') || n.includes('nim')) return 'https://integrate.api.nvidia.com/v1/chat/completions';
+  if (n.includes('openrouter')) return 'https://openrouter.ai/api/v1/chat/completions';
+  return '';
+}
+
+function getDefaultAIProviders() {
+  return [
+    {"name": "NVIDIA Gemma 4 31B", "apiKey": "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", "model": "google/gemma-4-31b-it", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": true},
+    {"name": "NVIDIA Kimi K2.5", "apiKey": "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", "model": "moonshotai/kimi-k2.5", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false},
+    {"name": "NVIDIA Qwen3 80B", "apiKey": "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", "model": "qwen/qwen3-next-80b-a3b-thinking", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false},
+    {"name": "NVIDIA DeepSeek V3.1", "apiKey": "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", "model": "deepseek-ai/deepseek-v3.1", "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions", "active": false}
+  ];
+}
+
+function removeAIProvider(idx) {
+  if (confirm('Remove this AI provider?')) {
+    aiProviders.splice(idx, 1);
+    saveAIProviders();
+    renderAIProviders();
+  }
+}
+
+function testAIProvider(idx) {
+  const provider = aiProviders[idx];
+  if (!provider) return;
+  
+  const testBtn = event.target;
+  testBtn.disabled = true;
+  testBtn.textContent = 'Testing...';
+  
+  const payload = {
+    messages: [{role: 'user', content: 'Say "OK" only.'}],
+    model: provider.model,
+    max_tokens: 10
+  };
+  
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  
+  if (provider.name.toLowerCase().includes('anthropic') || provider.name.toLowerCase().includes('claude')) {
+    headers['x-api-key'] = provider.apiKey;
+  } else {
+    headers['Authorization'] = 'Bearer ' + provider.apiKey;
+  }
+  
+  fetch(provider.endpoint, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(payload)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error.message || 'API Error');
+    provider.testStatus = 'success';
+    saveAIProviders();
+    showToast('Provider connected!', 'success');
+  })
+  .catch(err => {
+    provider.testStatus = 'error';
+    saveAIProviders();
+    showToast('Connection failed: ' + err.message, 'error');
+  })
+  .finally(() => {
+    testBtn.disabled = false;
+    testBtn.textContent = 'Test';
+    renderAIProviders();
+    updateAIStatus();
+  });
+}
+
+function renderAIStatusPanel() {
+  const panel = document.getElementById('aiStatusContent');
+  if (!panel) return;
+  
+  if (aiProviders.length === 0) {
+    panel.innerHTML = '<p style="color:var(--text-light);font-size:14px;">No AI providers configured. Add one in Settings.</p>';
+    return;
+  }
+  
+  panel.innerHTML = aiProviders.map(p => `
+    <div style="padding:12px;background:var(--input-bg);border-radius:6px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="width:8px;height:8px;border-radius:50%;${p.testStatus === 'success' ? 'background:#10b981;' : p.testStatus === 'error' ? 'background:#ef4444;' : 'background:#f59e0b;'}"></span>
+        <strong>${escapeHtml(p.name)}</strong>
+      </div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:2px;">${escapeHtml(p.model)}</div>
+      <div style="font-size:11px;color:var(--text-lighter);">${p.testStatus || 'Untested'}</div>
+    </div>
+  `).join('');
+}
+
+function toggleAIStatusPanel() {
+  const panel = document.getElementById('aiStatusPanel');
+  panel.classList.toggle('open');
+}
+
+// ======================== AI CLEANUP ========================
+async function aiCleanupField(fieldId) {
+  const field = document.getElementById(fieldId);
+  if (!field || !field.value.trim()) {
+    showToast('Field is empty', 'error');
+    return;
+  }
+  
+  const activeProvider = aiProviders.find(p => p.testStatus === 'success');
+  if (!activeProvider) {
+    showToast('No AI provider connected. Configure one in Settings.', 'error');
+    return;
+  }
+  
+  const btn = field.parentElement.querySelector('.ai-cleanup-btn');
+  btn.classList.add('loading');
+  
+  const prompt = `Clean up this construction inspection report field. Fix grammar, spelling, punctuation. Make it professional and concise. Keep technical terms, station numbers, measurements exact. Do not change the meaning. Only return the cleaned text, nothing else. Field type: ${fieldId}. Text: ${field.value}`;
+  
+  try {
+    const cleaned = await callAI(activeProvider, prompt);
+    field.value = cleaned;
+    showToast('Field cleaned!', 'success');
+  } catch (err) {
+    showToast('Cleanup failed: ' + err.message, 'error');
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+async function aiCleanupFullReport() {
+  const activeProvider = aiProviders.find(p => p.testStatus === 'success');
+  if (!activeProvider) {
+    showToast('No AI provider connected. Configure one in Settings.', 'error');
+    return;
+  }
+  
+  const textFields = [
+    'projectName', 'contractor', 'inspector', 'superintendent', 'employeeName', 'location', 'siteConditions',
+    'deliveryNotes', 'workPerformed', 'changeOrders', 'lookAhead', 'testsPerformed', 'photoNotes',
+    'preparedBy'
+  ];
+  
+  let cleaned = 0;
+  for (let i = 0; i < textFields.length; i++) {
+    const fieldId = textFields[i];
+    const field = document.getElementById(fieldId);
+    if (!field || !field.value.trim()) continue;
+    
+    showToast(`Cleaning field ${i+1} of ${textFields.length}...`, 'success');
+    const prompt = `Clean up this construction inspection report field. Fix grammar, spelling, punctuation. Make it professional and concise. Keep technical terms exact. Only return cleaned text. Field: ${fieldId}. Text: ${field.value}`;
+    
+    try {
+      const result = await callAI(activeProvider, prompt);
+      field.value = result;
+      cleaned++;
+    } catch (err) {
+      console.error('Failed to clean ' + fieldId, err);
+    }
+  }
+  
+  showToast(`Cleaned ${cleaned} fields!`, 'success');
+}
+
+async function callAI(provider, prompt) {
+  const payload = {
+    messages: [{role: 'user', content: prompt}],
+    model: provider.model,
+    max_tokens: 1000
+  };
+  
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  
+  if (provider.name.toLowerCase().includes('anthropic') || provider.name.toLowerCase().includes('claude')) {
+    headers['x-api-key'] = provider.apiKey;
+  } else {
+    headers['Authorization'] = 'Bearer ' + provider.apiKey;
+  }
+  
+  const res = await fetch(provider.endpoint, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(payload)
+  });
+  
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'AI API error');
+  
+  if (provider.name.toLowerCase().includes('anthropic') || provider.name.toLowerCase().includes('claude')) {
+    return data.content[0].text;
+  } else {
+    return data.choices[0].message.content;
+  }
+}
+
+// ======================== NAVIGATION ========================
+function showTab(idx) {
+  const sections = document.querySelectorAll('.page-section');
+  const tabs = document.querySelectorAll('.nav-tab');
+  sections.forEach((s, i) => {
+    s.classList.toggle('active', i === idx);
+  });
+  tabs.forEach((t, i) => {
+    t.classList.toggle('active', i === idx);
+  });
+  tabs[idx].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  window.scrollTo(0, 0);
+}
+
+function goHome() {
+  if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
+    autoSave();
+  }
+  document.getElementById('homeScreen').style.display = 'block';
+  document.getElementById('reportForm').style.display = 'none';
+}
+
+function newReport() {
+  currentReportId = 'report_' + Date.now();
+  resetForm();
+  loadSettings();
+  document.getElementById('homeScreen').style.display = 'none';
+  document.getElementById('reportForm').style.display = 'block';
+  showTab(0);
+
+  addCrewRow(); addCrewRow(); addCrewRow();addEquipRow('ownedEquipBody');
+  addEquipRow('ownedEquipBody');
+}
+
+// ======================== VOICE INPUT ========================
+let recognition = null;
+let activeVoiceBtn = null;
+
+function voiceInput(fieldId) {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('Voice input not supported in this browser', 'error');
+    return;
+  }
+
+  const field = document.getElementById(fieldId);
+  const btn = field.parentElement.querySelector('.voice-btn');
+
+  if (recognition && activeVoiceBtn === btn) {
+    recognition.stop();
+    return;
+  }
+
+  if (recognition) {
+    recognition.stop();
+    if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  activeVoiceBtn = btn;
+  btn.classList.add('recording');
+  const startValue = field.value;
+  let finalTranscript = '';
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript + ' ';
+      } else {
+        interim += event.results[i][0].transcript;
+      }
+    }
+    const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+    field.value = startValue + sep + finalTranscript + interim;
+  };
+
+  recognition.onend = () => {
+    btn.classList.remove('recording');
+    const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+    field.value = startValue + sep + finalTranscript.trim();
+    recognition = null;
+    activeVoiceBtn = null;
+  };
+
+  recognition.onerror = (e) => {
+    btn.classList.remove('recording');
+    recognition = null;
+    activeVoiceBtn = null;
+    if (e.error !== 'aborted') {
+      showToast('Voice error: ' + e.error, 'error');
+    }
+  };
+
+  recognition.start();
+  showToast('Listening...', 'success');
+}
+
+// ======================== PHOTO HANDLING ========================
+function handlePhotoUpload(event, gridId) {
+  const files = event.target.files;
+  if (!files.length) return;
+
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      resizeImage(e.target.result, 1200, (resized) => {
+        photoData[gridId].push(resized);
+        renderPhotoGrid(gridId);
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+  event.target.value = '';
+}
+
+function resizeImage(dataUrl, maxDim, callback) {
+  const img = new Image();
+  img.onload = () => {
+    let w = img.width, h = img.height;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else { w = Math.round(w * maxDim / h); h = maxDim; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    callback(canvas.toDataURL('image/jpeg', 0.7));
+  };
+  img.src = dataUrl;
+}
+
+function renderPhotoGrid(gridId) {
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = '';
+  photoData[gridId].forEach((src, idx) => {
+    const div = document.createElement('div');
+    div.className = 'photo-thumb';
+    div.innerHTML = `<img src="${src}" alt="Photo ${idx+1}"><button class="photo-remove" onclick="removePhoto('${gridId}',${idx})">&times;</button>`;
+    grid.appendChild(div);
+  });
+}
+
+function removePhoto(gridId, idx) {
+  photoData[gridId].splice(idx, 1);
+  renderPhotoGrid(gridId);
+}
+
+// ======================== DYNAMIC ROWS ========================
+function addCrewRow() {
+  const tbody = document.getElementById('crewBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="name-col"><input type="text" placeholder="Name"></td>
+    <td><select style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--input-bg);">
+      <option value="">--</option>
+      <option>Superintendent</option><option>Foreman</option><option>Operator</option>
+      <option>Pipe Fitter</option><option>Mason</option><option>Carpenter</option>
+      <option>Laborer</option><option>Flagger/MOT</option><option>QC Technician</option>
+    </select></td>
+    <td><input type="time" value="07:00"></td>
+    <td><input type="time" value="16:00"></td>
+    <td><select style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--input-bg);">
+      <option value="yes">Yes</option><option value="no">No</option>
+    </select></td>
+    <td><input type="number" value="8.5" step="0.5" style="width:50px"></td>
+    <td><button class="remove-btn" onclick="this.closest('tr').remove()">&times;</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addEquipRow(tbodyId) {
+  const tbody = document.getElementById(tbodyId);
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="Equipment name" list="equipList-datalist"></td>
+    <td><select style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:var(--input-bg);">
+      <option>Active</option><option>Idle</option>
+    </select></td>
+    <td><button class="remove-btn" onclick="this.closest('tr').remove()">&times;</button></td>
+  `;
+  
+  const datalist = document.getElementById('equipList-datalist') || document.createElement('datalist');
+  if (!datalist.id) {
+    datalist.id = 'equipList-datalist';
+    const equips = ['CAT 320 Excavator','CAT 330 Excavator','CAT D6 Dozer','Volvo A25G Hauler','Case 580 Backhoe','Bobcat S650 Skid Steer','Mini Excavator','Roller/Compactor','Motor Grader','Front End Loader','Dump Truck','Asphalt Paver','Asphalt Roller','Milling Machine','Concrete Mixer Truck','Concrete Pump','Vibrating Screed','Pipe Laser','Trench Box','Shoring System','Dewatering Pump','Generator','Air Compressor','Plate Compactor','Jumping Jack Compactor','Horizontal Directional Drill','Vacuum Excavator (Vac Truck)','Crane (specify tonnage)','Forklift','Boom Lift','Scissor Lift','Light Tower','Arrow Board','Water Truck','Fuel Truck','Flatbed Trailer'];
+    equips.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e;
+      datalist.appendChild(opt);
+    });
+    document.body.appendChild(datalist);
+  }
+  
+  tbody.appendChild(tr);
+}
+
+function addRentedEquipRow(tbodyId) {
+  const tbody = document.getElementById(tbodyId);
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="Equipment name" list="equipList-datalist"></td>
+    <td><input type="text" placeholder="Vendor"></td>
+    <td><select style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:var(--input-bg);">
+      <option>Active</option><option>Idle</option>
+    </select></td>
+    <td><button class="remove-btn" onclick="this.closest('tr').remove()">&times;</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addSubRow() {
+  const tbody = document.getElementById('subsBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="Company name"></td>
+    <td><input type="text" placeholder="Work description"></td>
+    <td><input type="number" min="0" style="width:50px"></td>
+    <td><button class="remove-btn" onclick="this.closest('tr').remove()">&times;</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addListItem(listId, inputId) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  const container = document.getElementById(listId);
+  const div = document.createElement('div');
+  div.className = 'list-item';
+  div.innerHTML = `<span class="item-text">${escapeHtml(val)}</span><button class="remove-btn" onclick="this.parentElement.remove()">&times;</button>`;
+  container.appendChild(div);
+  input.value = '';
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ======================== SIGNATURE ========================
+let sigCtx, sigDrawing = false;
+
+function initSignature() {
+  const canvas = document.getElementById('sigCanvas');
+  sigCtx = canvas.getContext('2d');
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    sigCtx.strokeStyle = '#1a3a5c';
+    sigCtx.lineWidth = 2;
+    sigCtx.lineCap = 'round';
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+  }
+
+  canvas.addEventListener('mousedown', (e) => { sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
+  canvas.addEventListener('mousemove', (e) => { if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); });
+  canvas.addEventListener('mouseup', () => { sigDrawing = false; signatureData = canvas.toDataURL(); });
+
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); }, { passive: false });
+  canvas.addEventListener('touchend', () => { sigDrawing = false; signatureData = canvas.toDataURL(); });
+}
+
+function clearSignature() {
+  const canvas = document.getElementById('sigCanvas');
+  sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  signatureData = null;
+}
+
+// ======================== SETTINGS ========================
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('fieldreport_settings') || '{}');
+    if (s.company) document.getElementById('contractor').value = s.company;
+    if (s.inspector) document.getElementById('inspector').value = s.inspector;
+    if (s.project) document.getElementById('projectName').value = s.project;
+    if (s.company) document.getElementById('settCompany').value = s.company;
+    if (s.inspector) document.getElementById('settInspector').value = s.inspector;
+    if (s.project) document.getElementById('settProject').value = s.project;
+    if (s.logo) document.getElementById('settLogo').value = s.logo;
+    if (s.owner) document.getElementById('settOwner').value = s.owner;
+    if (s.engineer) document.getElementById('settEngineer').value = s.engineer;
+    const role = localStorage.getItem('fieldreport_user_role') || 'Inspector';
+    document.getElementById('userRoleSelect').value = role;
+  } catch(e) {}
+}
+
+function saveSettings() {
+  const s = {
+    company: document.getElementById('settCompany').value,
+    inspector: document.getElementById('settInspector').value,
+    project: document.getElementById('settProject').value,
+    logo: document.getElementById('settLogo').value,
+    owner: document.getElementById('settOwner').value,
+    engineer: document.getElementById('settEngineer').value
+  };
+  localStorage.setItem('fieldreport_settings', JSON.stringify(s));
+  closeModal('settingsModal');
+  showToast('Settings saved!', 'success');
+}
+
+function openSettingsModal() { document.getElementById('settingsModal').classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ======================== SAVE / LOAD ========================
+function collectFormData() {
+  const data = {
+    id: currentReportId,
+    timestamp: new Date().toISOString(),
+    projectName: document.getElementById('projectName').value,
+    contractor: document.getElementById('contractor').value,
+    inspector: document.getElementById('inspector').value,
+    superintendent: document.getElementById('superintendent').value,
+    employeeName: document.getElementById('employeeName').value,
+    location: document.getElementById('location').value,
+    reportDate: document.getElementById('reportDate').value,
+    dayOfWeek: document.getElementById('dayOfWeek').value,
+    contractDay: document.getElementById('contractDay').value,
+    totalDays: document.getElementById('totalDays').value,
+    weather: {
+      sunny: document.getElementById('wxSunny').checked,
+      cloudy: document.getElementById('wxCloudy').checked,
+      clear: document.getElementById('wxClear').checked,
+      overcast: document.getElementById('wxOvercast').checked,
+      windy: document.getElementById('wxWindy').checked,
+      lightRain: document.getElementById('wxLightRain').checked,
+      heavyRain: document.getElementById('wxHeavyRain').checked,
+      tempHigh: document.getElementById('tempHigh').value,
+      tempLow: document.getElementById('tempLow').value,
+      precipitation: document.getElementById('precipitation').value,
+      siteConditions: document.getElementById('siteConditions').value
+    },
+    crew: getTableData('crewBody'),
+    ownedEquip: getTableData('ownedEquipBody'),
+    rentedEquip: getTableData('rentedEquipBody'),
+    materials: getListItems('materialsList'),
+    deliveryNotes: document.getElementById('deliveryNotes').value,
+    subs: getTableData('subsBody'),
+    visitors: getListItems('visitorsList'),
+    workPerformed: document.getElementById('workPerformed').value,
+    changeOrders: document.getElementById('changeOrders').value,
+    lookAhead: document.getElementById('lookAhead').value,
+    testsPerformed: document.getElementById('testsPerformed').value,
+    photoNotes: document.getElementById('photoNotes').value,
+    payItems: getPayItemsData(),
+    checklists: getChecklistsData(),
+    punchlist: JSON.parse(localStorage.getItem('fieldreport_punchlist') || '[]'),
+    preparedBy: document.getElementById('preparedBy').value,
+    userRole: localStorage.getItem('fieldreport_user_role') || 'Inspector',
+    photos: photoData,
+    signature: signatureData
+  };
+  return data;
+}
+
+function getTableData(tbodyId) {
+  const rows = [];
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return rows;
+  for (const tr of tbody.querySelectorAll('tr')) {
+    const cells = [];
+    for (const td of tr.querySelectorAll('td')) {
+      const input = td.querySelector('input, select');
+      cells.push(input ? input.value : td.textContent.trim());
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
+function getListItems(listId) {
+  const items = [];
+  const container = document.getElementById(listId);
+  for (const div of container.querySelectorAll('.list-item .item-text')) {
+    items.push(div.textContent);
+  }
+  return items;
+}
+
+function saveDraft() {
+  const data = collectFormData();
+  data.status = 'draft';
+  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  drafts[data.id] = data;
+  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  showToast('Draft saved!', 'success');
+}
+
+function autoSave() {
+  try {
+    const data = collectFormData();
+    data.status = 'draft';
+    const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+    drafts[data.id] = data;
+    localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  } catch(e) {}
+}
+
+function showSubmitted() {
+  const container = document.getElementById('submittedContainer');
+  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const keys = Object.keys(drafts).filter(k => drafts[k].status === 'submitted');
+
+  if (keys.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-light);text-align:center;">No submitted reports</p>';
+  } else {
+    container.innerHTML = keys.map(k => {
+      const d = drafts[k];
+      return `<div class="report-list-item" onclick="loadReport('${k}')">
+        <div class="rli-info">
+          <h4>${d.projectName || 'Untitled'}</h4>
+          <p>${d.reportDate || ''} - ${d.inspector || ''}</p>
+        </div>
+        <span class="rli-badge submitted">Submitted</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('submittedList').style.display = 'block';
+}
+
+function loadReport(id) {
+  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const data = drafts[id];
+  if (!data) return;
+  currentReportId = id;
+  resetForm();
+  populateForm(data);
+  document.getElementById('homeScreen').style.display = 'none';
+  document.getElementById('reportForm').style.display = 'block';
+  document.getElementById('submittedList').style.display = 'none';
+  showTab(0);
+}
+
+function deleteReport(id) {
+  if (!confirm('Delete this report?')) return;
+  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  delete drafts[id];
+  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));}
+
+function resetForm() {
+  document.querySelectorAll('#reportForm input[type="text"], #reportForm input[type="number"], #reportForm textarea').forEach(el => el.value = '');
+  document.querySelectorAll('#reportForm input[type="checkbox"]').forEach(el => el.checked = false);
+  document.getElementById('crewBody').innerHTML = '';document.getElementById('ownedEquipBody').innerHTML = '';
+  document.getElementById('rentedEquipBody').innerHTML = '';
+  document.getElementById('subsBody').innerHTML = '';
+  document.getElementById('materialsList').innerHTML = '';
+  document.getElementById('visitorsList').innerHTML = '';
+  document.getElementById('payItemsBody').innerHTML = '';
+  document.getElementById('punchlistContainer').innerHTML = '';
+  photoData = { sitePhotos: [], deliveryPhotos: [] };
+  ['sitePhotos','deliveryPhotos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  signatureData = null;
+  if (sigCtx) {
+    const canvas = document.getElementById('sigCanvas');
+    sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('reportDate').value = today;
+  updateDayOfWeek();
+}
+
+function populateForm(d) {
+  document.getElementById('projectName').value = d.projectName || '';
+  document.getElementById('contractor').value = d.contractor || '';
+  document.getElementById('inspector').value = d.inspector || '';
+  document.getElementById('superintendent').value = d.superintendent || '';
+  document.getElementById('employeeName').value = d.employeeName || '';
+  document.getElementById('location').value = d.location || '';
+  document.getElementById('reportDate').value = d.reportDate || '';
+  updateDayOfWeek();
+  document.getElementById('contractDay').value = d.contractDay || '';
+  document.getElementById('totalDays').value = d.totalDays || '';
+  calcRemaining();
+
+  if (d.weather) {
+    document.getElementById('wxSunny').checked = d.weather.sunny || false;
+    document.getElementById('wxCloudy').checked = d.weather.cloudy || false;
+    document.getElementById('wxClear').checked = d.weather.clear || false;
+    document.getElementById('wxOvercast').checked = d.weather.overcast || false;
+    document.getElementById('wxWindy').checked = d.weather.windy || false;
+    document.getElementById('wxLightRain').checked = d.weather.lightRain || false;
+    document.getElementById('wxHeavyRain').checked = d.weather.heavyRain || false;
+    document.getElementById('tempHigh').value = d.weather.tempHigh || '';
+    document.getElementById('tempLow').value = d.weather.tempLow || '';
+    document.getElementById('precipitation').value = d.weather.precipitation || '';
+    document.getElementById('siteConditions').value = d.weather.siteConditions || '';
+  }
+
+  if (d.crew) d.crew.forEach(row => { addCrewRow(); fillLastRow('crewBody', row); });
+  if (d.ownedEquip) d.ownedEquip.forEach(row => { addEquipRow('ownedEquipBody'); fillLastRow('ownedEquipBody', row); });
+  if (d.rentedEquip) d.rentedEquip.forEach(row => { addRentedEquipRow('rentedEquipBody'); fillLastRow('rentedEquipBody', row); });
+  if (d.subs) d.subs.forEach(row => { addSubRow(); fillLastRow('subsBody', row); });
+
+  if (d.materials) d.materials.forEach(m => {
+    const container = document.getElementById('materialsList');
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `<span class="item-text">${escapeHtml(m)}</span><button class="remove-btn" onclick="this.parentElement.remove()">&times;</button>`;
+    container.appendChild(div);
+  });
+  if (d.visitors) d.visitors.forEach(v => {
+    const container = document.getElementById('visitorsList');
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `<span class="item-text">${escapeHtml(v)}</span><button class="remove-btn" onclick="this.parentElement.remove()">&times;</button>`;
+    container.appendChild(div);
+  });
+
+  document.getElementById('deliveryNotes').value = d.deliveryNotes || '';
+  document.getElementById('workPerformed').value = d.workPerformed || '';
+  document.getElementById('changeOrders').value = d.changeOrders || '';
+  document.getElementById('lookAhead').value = d.lookAhead || '';
+  document.getElementById('testsPerformed').value = d.testsPerformed || '';
+  document.getElementById('photoNotes').value = d.photoNotes || '';
+  document.getElementById('preparedBy').value = d.preparedBy || '';
+
+  // Restore user role
+  if (d.userRole) {
+    localStorage.setItem('fieldreport_user_role', d.userRole);
+    const roleSelect = document.getElementById('userRoleSelect');
+    if (roleSelect) { roleSelect.value = d.userRole; applyRolePermissions(); }
+  }
+
+  // Restore pay items
+  if (d.payItems && d.payItems.length > 0) {
+    const tbody = document.getElementById('payItemsBody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      d.payItems.forEach(row => {
+        addPayItem();
+        const tr = tbody.lastElementChild;
+        const inputs = tr.querySelectorAll('td input');
+        row.forEach((val, i) => { if (inputs[i]) inputs[i].value = val; });
+      });
+      updatePayItemProgress();
+    }
+  }
+
+  // Restore checklists
+  if (d.checklists) {
+    ['osha', 'swppp', 'dot'].forEach(prefix => {
+      for (let i = 1; i <= 10; i++) {
+        const cb = document.getElementById(prefix + i);
+        if (cb) cb.checked = false;
+      }
+      if (d.checklists[prefix]) {
+        d.checklists[prefix].forEach(i => {
+          const cb = document.getElementById(prefix + i);
+          if (cb) cb.checked = true;
+        });
+      }
+    });
+    updateSafetyScore();
+  }
+
+  // Restore punchlist
+  if (d.punchlist && d.punchlist.length > 0) {
+    localStorage.setItem('fieldreport_punchlist', JSON.stringify(d.punchlist));
+    loadPunchListFromStorage();
+  }
+
+  if (d.photos) {
+    photoData = d.photos;
+    Object.keys(photoData).forEach(k => renderPhotoGrid(k));
+  }
+  if (d.signature) {
+    signatureData = d.signature;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.getElementById('sigCanvas');
+      sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+      sigCtx.drawImage(img, 0, 0);
+    };
+    img.src = d.signature;
+  }
+}
+
+function fillLastRow(tbodyId, cells) {
+  const tbody = document.getElementById(tbodyId);
+  const rows = tbody.querySelectorAll('tr');
+  const tr = rows[rows.length - 1];
+  const tds = tr.querySelectorAll('td');
+  cells.forEach((val, i) => {
+    if (i < tds.length) {
+      const input = tds[i].querySelector('input, select');
+      if (input && val) input.value = val;
+    }
+  });
+}
+
+function submitReport() {
+  const data = collectFormData();
+  if (!data.projectName) { showToast('Please enter Project Name', 'error'); showTab(0); return; }
+  if (!data.reportDate) { showToast('Please enter Date', 'error'); showTab(0); return; }
+  data.status = 'submitted';
+  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  drafts[data.id] = data;
+  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  generatePDF();
+  showToast('Report submitted!', 'success');
+}
+
+// ======================== PDF GENERATION ========================
+async function generatePDF() {
+  const data = collectFormData();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'letter');
+  const pw = 215.9, ph = 279.4;
+  const ml = 15, mr = 15, mt = 15;
+  const cw = pw - ml - mr;
+  let y = mt;
+
+  const headerBg = [26, 58, 92];
+  const lightBg = [240, 244, 248];
+  const borderColor = [200, 210, 220];
+
+  function addHeader(text) {
+    doc.setFillColor(...headerBg);
+    doc.rect(ml, y, cw, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(text, ml + 3, y + 5.5);
+    doc.setTextColor(0, 0, 0);
+    y += 10;
+  }
+
+  function addField(label, value, x, w) {
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 100, 100);
+    doc.text(label, x, y);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.text(String(value || ''), x, y + 4);
+    doc.setDrawColor(...borderColor);
+    doc.line(x, y + 5, x + w, y + 5);
+  }
+
+  function checkPage(needed) {
+    if (y + needed > ph - 20) {
+      doc.addPage();
+      y = mt;
+      return true;
+    }
+    return false;
+  }
+
+  doc.setFillColor(...headerBg);
+  doc.rect(0, 0, pw, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DAILY REPORT OF CONSTRUCTION ACTIVITY', pw / 2, 10, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const settings = JSON.parse(localStorage.getItem('fieldreport_settings') || '{}');
+  doc.text(settings.owner || 'Construction Inspection Report', pw / 2, 17, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+
+  // QR Code - top right corner of page 1
+  try {
+    const qrData = JSON.stringify({
+      project: (data.projectName || '').substring(0, 40),
+      date: data.reportDate || '',
+      inspector: (data.inspector || '').substring(0, 30),
+      id: data.reportId || new Date().getTime().toString(36)
+    });
+    const qrDataUrl = await generateQRCode(qrData, 200);
+    if (qrDataUrl) {
+      doc.addImage(qrDataUrl, 'PNG', pw - mr - 20, 1, 20, 20);
+    }
+  } catch(e) {
+    console.warn('QR code generation failed:', e);
+  }
+
+  y = 28;
+
+  const col1 = ml, col2 = ml + cw / 2 + 5;
+  const halfW = cw / 2 - 5;
+  addField('PROJECT NAME / NO.', data.projectName, col1, halfW);
+  addField('DATE', data.reportDate + ' (' + data.dayOfWeek + ')', col2, halfW);
+  y += 10;
+  addField('CONTRACTOR', data.contractor, col1, halfW);
+  addField('INSPECTOR', data.inspector, col2, halfW);
+  y += 10;
+  addField('SUPERINTENDENT', data.superintendent, col1, halfW);
+  addField('LOCATION', data.location, col2, halfW);
+  y += 10;
+
+  const contractStr = data.contractDay ? ('Day ' + data.contractDay + ' of ' + data.totalDays) : '';
+  addField('CONTRACT DAY', contractStr, col1, halfW);
+  addField('PREPARED BY', data.preparedBy || data.employeeName, col2, halfW);
+  y += 12;
+
+  addHeader('WEATHER CONDITIONS');
+  const wxItems = [];
+  if (data.weather.sunny) wxItems.push('Sunny');
+  if (data.weather.cloudy) wxItems.push('Cloudy');
+  if (data.weather.clear) wxItems.push('Clear');
+  if (data.weather.overcast) wxItems.push('Overcast');
+  if (data.weather.windy) wxItems.push('Windy');
+  if (data.weather.lightRain) wxItems.push('Light Rain');
+  if (data.weather.heavyRain) wxItems.push('Heavy Rain');
+
+  doc.setFontSize(9);
+  const tempRange = (data.weather.tempLow && data.weather.tempHigh) ?
+    data.weather.tempLow + '°F - ' + data.weather.tempHigh + '°F' :
+    (data.weather.tempHigh ? data.weather.tempHigh + '°F' : '');
+  const wxLine = wxItems.join(', ') + (tempRange ? '   |   Temp: ' + tempRange : '') +
+    (data.weather.precipitation ? '   |   Precip: ' + data.weather.precipitation + '"' : '') +
+    (data.weather.siteConditions ? '   |   Site: ' + data.weather.siteConditions : '');
+  doc.text(wxLine || 'N/A', ml + 3, y);
+  y += 8;
+
+  if (data.personnel && data.personnel.length > 0) {
+    addHeader('PERSONNEL ON SITE / LABOR CLASSIFICATIONS');
+    const pHeaders = ['Construction Group', 'Supt', 'Foreman', 'Operator', 'Pipe Fitter', 'Mason', 'Carpenter', 'Labor', 'Flagger', 'QC Tech', 'Total Hrs'];
+    const pRows = data.personnel.filter(r => r.some(c => c));
+    if (pRows.length > 0) {
+      doc.autoTable({
+        startY: y,
+        head: [pHeaders],
+        body: pRows,
+        margin: { left: ml, right: mr },
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: headerBg, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7, halign: 'center' },
+        columnStyles: { 0: { halign: 'left' } },
+        theme: 'grid'
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+  }
+
+  if (data.crew && data.crew.length > 0) {
+    checkPage(30);
+    addHeader('CREW / EMPLOYEE TIME');
+    const crewHeaders = ['Employee', 'Trade', 'Clock In', 'Clock Out', 'Lunch', 'Hours'];
+    const crewRows = data.crew.filter(r => r[0]).map(r => r.slice(0, 6));
+    if (crewRows.length > 0) {
+      doc.autoTable({
+        startY: y,
+        head: [crewHeaders],
+        body: crewRows,
+        margin: { left: ml, right: mr },
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: headerBg, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
+        theme: 'grid'
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+  }
+
+  const ownedRows = (data.ownedEquip || []).filter(r => r[0]);
+  const rentedRows = (data.rentedEquip || []).filter(r => r[0]);
+  if (ownedRows.length > 0 || rentedRows.length > 0) {
+    checkPage(30);
+    addHeader('EQUIPMENT ON SITE');
+    if (ownedRows.length > 0) {
+      doc.autoTable({
+        startY: y,
+        head: [['Owned Equipment', 'Status']],
+        body: ownedRows.map(r => [r[0], r[1]]),
+        margin: { left: ml, right: mr },
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: headerBg, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
+        theme: 'grid'
+      });
+      y = doc.lastAutoTable.finalY + 2;
+    }
+    if (rentedRows.length > 0) {
+      doc.autoTable({
+        startY: y,
+        head: [['Rented Equipment', 'Vendor', 'Status']],
+        body: rentedRows.map(r => [r[0], r[1], r[2]]),
+        margin: { left: ml, right: mr },
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: headerBg, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
+        theme: 'grid'
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+  }
+
+  if (data.materials && data.materials.length > 0) {
+    checkPage(20);
+    addHeader('MATERIALS USED');
+    doc.setFontSize(9);
+    data.materials.forEach(m => {
+      checkPage(6);
+      doc.text('* ' + m, ml + 3, y);
+      y += 5;
+    });
+    y += 3;
+  }
+
+  if (data.deliveryNotes) {
+    checkPage(20);
+    addHeader('MATERIAL DELIVERY TICKETS');
+    const dLines = doc.splitTextToSize(data.deliveryNotes, cw - 6);
+    doc.setFontSize(9);
+    dLines.forEach(line => {
+      checkPage(6);
+      doc.text(line, ml + 3, y);
+      y += 4.5;
+    });
+    y += 3;
+  }
+
+  const subRows = (data.subs || []).filter(r => r[0]);
+  if (subRows.length > 0) {
+    checkPage(25);
+    addHeader('SUBCONTRACTORS');
+    doc.autoTable({
+      startY: y,
+      head: [['Subcontractor', 'Work Description', '# Workers']],
+      body: subRows.map(r => [r[0], r[1], r[2]]),
+      margin: { left: ml, right: mr },
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: headerBg, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
+      theme: 'grid'
+    });
+    y = doc.lastAutoTable.finalY + 4;
+  }
+
+  doc.addPage();
+  y = mt;
+
+  doc.setFillColor(...headerBg);
+  doc.rect(0, 0, pw, 14, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DAILY REPORT OF CONSTRUCTION ACTIVITY', pw / 2, 10, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  y = 20;
+
+  addHeader('NARRATIVE: WORK PERFORMED TODAY');
+  if (data.workPerformed) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const wpLines = doc.splitTextToSize(data.workPerformed, cw - 6);
+    wpLines.forEach(line => {
+      checkPage(6);
+      doc.text(line, ml + 3, y);
+      y += 4.5;
+    });
+  } else {
+    doc.setFontSize(9);
+    doc.text('N/A', ml + 3, y); y += 5;
+  }
+  y += 4;
+
+  if (data.changeOrders) {
+    checkPage(20);
+    addHeader('CHANGE ORDERS / ADDITIONAL WORK');
+    doc.setFontSize(9);
+    const coLines = doc.splitTextToSize(data.changeOrders, cw - 6);
+    coLines.forEach(line => {
+      checkPage(6);
+      doc.text(line, ml + 3, y);
+      y += 4.5;
+    });
+    y += 4;
+  }
+
+
+  if (data.testsPerformed) {
+    checkPage(20);
+    addHeader('TESTS PERFORMED');
+    doc.setFontSize(9);
+    const tpLines = doc.splitTextToSize(data.testsPerformed, cw - 6);
+    tpLines.forEach(line => { checkPage(6); doc.text(line, ml + 3, y); y += 4.5; });
+    y += 4;
+  }
+
+  if (data.lookAhead) {
+    checkPage(20);
+    addHeader('2-WEEK LOOK AHEAD');
+    doc.setFontSize(9);
+    const laLines = doc.splitTextToSize(data.lookAhead, cw - 6);
+    laLines.forEach(line => { checkPage(6); doc.text(line, ml + 3, y); y += 4.5; });
+    y += 4;
+  }
+
+  
+
+  checkPage(30);
+  y += 2;
+  doc.setDrawColor(...borderColor);
+  doc.line(ml, y, ml + cw, y); y += 2;
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+  doc.text('VISITORS:', ml, y + 3);
+  doc.setFont('helvetica', 'normal');
+  doc.text((data.visitors || []).join(', ') || 'None', ml + 22, y + 3);
+  y += 6;
+  doc.line(ml, y, ml + cw, y); y += 2;
+  doc.setFont('helvetica', 'bold');
+  doc.text('DELIVERIES:', ml, y + 3);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.deliveryNotes ? 'See delivery section' : 'None', ml + 25, y + 3);
+  y += 6;
+  doc.line(ml, y, ml + cw, y); y += 2;
+  doc.setFont('helvetica', 'bold');
+  doc.text('TEST PERFORMED:', ml, y + 3);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.testsPerformed ? 'See tests section' : 'None', ml + 32, y + 3);
+  y += 8;
+
+  doc.line(ml, y, ml + cw, y); y += 2;
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  doc.text('Prepared By:', ml, y + 4);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.preparedBy || data.employeeName || '', ml + 28, y + 4);
+
+  doc.text('Date:', ml + cw - 60, y + 4);
+  doc.text(data.reportDate || '', ml + cw - 45, y + 4);
+  y += 6;
+
+  if (signatureData) {
+    try {
+      doc.addImage(signatureData, 'PNG', ml + 28, y, 50, 15);
+    } catch(e) {}
+    y += 18;
+  }
+
+  const allPhotoSections = [
+    { key: 'sitePhotos', title: 'SITE PHOTO DOCUMENTATION' }{ key: 'deliveryPhotos', title: 'DELIVERY TICKET PHOTOS' }];
+
+  for (const section of allPhotoSections) {
+    const photos = data.photos[section.key] || [];
+    if (photos.length === 0) continue;
+
+    doc.addPage();
+    y = mt;
+
+    doc.setFillColor(...headerBg);
+    doc.rect(0, 0, pw, 14, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(section.title, pw / 2, 10, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    y = 20;
+
+    const photosPerRow = 3;
+    const photoW = (cw - (photosPerRow - 1) * 4) / photosPerRow;
+    const photoH = photoW * 0.75;
+
+    photos.forEach((src, idx) => {
+      const col = idx % photosPerRow;
+      if (col === 0 && idx > 0) y += photoH + 6;
+      if (y + photoH > ph - 15) {
+        doc.addPage();
+        y = mt;
+      }
+      const x = ml + col * (photoW + 4);
+      try {
+        doc.addImage(src, 'JPEG', x, y, photoW, photoH);
+        doc.setDrawColor(...borderColor);
+        doc.rect(x, y, photoW, photoH);
+      } catch(e) {}
+    });
+    y += photoH + 6;
+
+    if (section.key === 'sitePhotos' && data.photoNotes) {
+      checkPage(15);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      const noteLines = doc.splitTextToSize('Notes: ' + data.photoNotes, cw);
+      noteLines.forEach(line => {
+        checkPage(5);
+        doc.text(line, ml, y);
+        y += 4;
+      });
+    }
+  }
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Page ' + i + ' of ' + totalPages, pw / 2, ph - 8, { align: 'center' });
+    doc.text(data.projectName + ' | ' + data.reportDate, ml, ph - 8);
+    doc.text('FieldReport Pro', pw - mr, ph - 8, { align: 'right' });
+  }
+
+  const fileName = 'DailyReport_' + (data.projectName || 'Report').replace(/[^a-zA-Z0-9]/g, '_') + '_' + (data.reportDate || 'undated') + '.pdf';
+  doc.save(fileName);
+  showToast('PDF generated: ' + fileName, 'success');
+}
+
+// ======================== QR CODE ON PDF (Feature 11) ========================
+// Uses qrcode-generator library (loaded from CDN) with canvas fallback
+async function generateQRCode(text, size) {
+  size = size || 200;
+  // Method 1: Use qrcode-generator if loaded
+  if (typeof qrcode !== 'undefined') {
+    const qr = qrcode(0, 'L');
+    qr.addData(text);
+    qr.make();
+    const moduleCount = qr.getModuleCount();
+    const cellSize = Math.floor(size / (moduleCount + 8));
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = (moduleCount + 8) * cellSize;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    const offset = 4 * cellSize;
+    for (let r = 0; r < moduleCount; r++) {
+      for (let c = 0; c < moduleCount; c++) {
+        if (qr.isDark(r, c)) ctx.fillRect(offset + c * cellSize, offset + r * cellSize, cellSize, cellSize);
+      }
+    }
+    return canvas.toDataURL('image/png');
+  }
+  // Method 2: Fetch from goqr.me API (online fallback)
+  try {
+    const url = 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size + '&data=' + encodeURIComponent(text);
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch(e) {
+    console.warn('QR API fallback failed:', e);
+    return null;
+  }
+}
+
+// ======================== REMOVED FEATURES ========================
+// Template, Export/Import, Monthly Summary, Dashboard removed in Lite version
+
+
+
+
+// ======================== FEATURE 1: OFFLINE PWA + SERVICE WORKER ========================
+function initServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+const CACHE_NAME = 'fieldreport-v3';
+const URLS_TO_CACHE = [
+  './',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'
+];
+self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(URLS_TO_CACHE).catch(() => {}))));
+self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)).catch(() => new Response('Offline'))));
+    `;
+    try {
+      const swBlob = new Blob([swCode], {type: 'application/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+    } catch(e) {}
+  }
+}
+
+window.addEventListener('online', () => {
+  document.body.classList.remove('offline');
+  showToast('Back online', 'success');
+});
+
+window.addEventListener('offline', () => {
+  document.body.classList.add('offline');
+  showToast('Working offline', 'warning');
+});
+
+// ======================== FEATURE 2: AUTO-WEATHER FROM GPS ========================
+async function autoFillWeather() {
+  showToast('Getting location...', '');
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {timeout: 10000})
+    );
+    const {latitude, longitude} = pos.coords;
+    const pointRes = await fetch(`https://api.weather.gov/points/${latitude.toFixed(4)},${longitude.toFixed(4)}`);
+    const pointData = await pointRes.json();
+    const forecastUrl = pointData.properties.forecastHourly;
+    const fcRes = await fetch(forecastUrl);
+    const fcData = await fcRes.json();
+    const periods = fcData.properties.periods.slice(0, 12);
+    const temps = periods.map(p => p.temperature);
+    document.getElementById('tempHigh').value = Math.max(...temps);
+    document.getElementById('tempLow').value = Math.min(...temps);
+    const conditions = periods.map(p => p.shortForecast.toLowerCase()).join(' ');
+    document.getElementById('wxSunny').checked = conditions.includes('sunny') || conditions.includes('clear');
+    document.getElementById('wxCloudy').checked = conditions.includes('cloud') || conditions.includes('partly');
+    document.getElementById('wxClear').checked = conditions.includes('clear');
+    document.getElementById('wxOvercast').checked = conditions.includes('overcast');
+    document.getElementById('wxWindy').checked = periods.some(p => p.windSpeed && parseInt(p.windSpeed) > 20);
+    document.getElementById('wxLightRain').checked = conditions.includes('light rain') || conditions.includes('drizzle');
+    document.getElementById('wxHeavyRain').checked = conditions.includes('heavy rain') || conditions.includes('thunderstorm');
+    const precip = periods.reduce((sum, p) => sum + (p.probabilityOfPrecipitation?.value || 0), 0) / periods.length;
+    if (precip > 50) document.getElementById('precipitation').value = '0.10';
+    showToast('Weather auto-filled from NWS!', 'success');
+  } catch(e) {
+    showToast('Weather fetch failed: ' + e.message, 'error');
+  }
+}
+
+// ======================== FEATURE 3: SMART DICTATE ========================
+async function smartDictate() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('Voice input not supported in your browser', 'error');
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  showToast('Listening... Speak freely about today\'s work', '');
+  recognition.onresult = async (event) => {
+    const transcript = Array.from(event.results)
+      .map(result => result[0].transcript)
+      .join('');
+    showToast('Processing dictation...', '');
+    try {
+      const aiProvider = aiProviders[0];
+      if (!aiProvider) {
+        showToast('No AI provider configured', 'error');
+        return;
+      }
+      const prompt = `Parse this construction inspection dictation into JSON fields. Extract: workPerformed, weather (sunny/cloudy/rain), tempHigh, tempLow, crewCount, changeOrders, safetyIssues, testsPerformed. Return ONLY valid JSON with no markdown. Dictation: "${transcript}"`;
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({provider: aiProvider.name, prompt: prompt, apiKey: aiProvider.apiKey})
+      });
+      if (!response.ok) throw new Error('AI API failed');
+      const result = await response.json();
+      const parsed = JSON.parse(result.text);
+      if (parsed.workPerformed) document.getElementById('workPerformed').value = parsed.workPerformed;
+      if (parsed.changeOrders) document.getElementById('changeOrders').value = parsed.changeOrders;if (parsed.testsPerformed) document.getElementById('testsPerformed').value = parsed.testsPerformed;
+      if (parsed.tempHigh) document.getElementById('tempHigh').value = parsed.tempHigh;
+      if (parsed.tempLow) document.getElementById('tempLow').value = parsed.tempLow;
+      if (parsed.crewCount) document.getElementById('crewCount').value = parsed.crewCount;
+      showToast('Dictation parsed and fields filled!', 'success');
+    } catch(e) {
+      showToast('AI parsing failed: ' + e.message, 'error');
+    }
+  };
+  recognition.start();
+}
+
+// ======================== FEATURE 4: PAY ITEMS ========================
+function getPayItemsData() {
+  const rows = [];
+  const tbody = document.getElementById('payItemsBody');
+  if (!tbody) return rows;
+  for (const tr of tbody.querySelectorAll('tr')) {
+    const cells = [];
+    for (const td of tr.querySelectorAll('td')) {
+      const input = td.querySelector('input');
+      cells.push(input ? input.value : td.textContent.trim());
+    }
+    if (cells.some(c => c)) rows.push(cells);
+  }
+  return rows;
+}
+
+function addPayItem() {
+  const tbody = document.getElementById('payItemsBody');
+  const defaultItems = JSON.parse(localStorage.getItem('fieldreport_pay_items') || '[]');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="1" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
+    <td><input type="text" placeholder="Earthwork" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
+    <td><input type="text" placeholder="CY" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
+    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;" onchange="updatePayItemProgress()"></td>
+    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;" onchange="updatePayItemProgress()"></td>
+    <td><input type="number" placeholder="0" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;" onchange="updatePayItemProgress()"></td>
+    <td><span>0%</span> <button class="remove-btn" onclick="this.parentElement.parentElement.remove()" style="margin-left:4px;">&times;</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function updatePayItemProgress() {
+  const tbody = document.getElementById('payItemsBody');
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
+  rows.forEach(tr => {
+    const cells = tr.querySelectorAll('td input');
+    if (cells.length >= 6) {
+      const toDate = parseFloat(cells[4].value) || 0;
+      const contract = parseFloat(cells[5].value) || 1;
+      const pct = contract > 0 ? Math.round((toDate / contract) * 100) : 0;
+      tr.querySelector('td:last-child span').textContent = pct + '%';
+    }
+  });
+}
+
+function configurPayItems() {
+  showToast('Configure default pay items in Settings', 'info');
+}
+
+// ======================== FEATURE 5: CHECKLISTS & SAFETY SCORE ========================
+function toggleChecklist(id) {
+  const elem = document.getElementById(id);
+  elem.classList.toggle('hidden');
+  elem.previousElementSibling.classList.toggle('collapsed');
+  updateSafetyScore();
+}
+
+function getChecklistsData() {
+  const data = {};
+  ['osha', 'swppp', 'dot'].forEach(prefix => {
+    data[prefix] = [];
+    for (let i = 1; i <= 10; i++) {
+      const elem = document.getElementById(prefix + i);
+      if (elem && elem.checked) data[prefix].push(i);
+    }
+  });
+  return data;
+}
+
+function updateSafetyScore() {
+  const oshaCount = document.querySelectorAll('.osha-item:checked').length;
+  const oshaTotal = document.querySelectorAll('.osha-item').length;
+  const score = oshaTotal > 0 ? Math.round((oshaCount / oshaTotal) * 100) : 0;
+  const display = document.getElementById('safetyScoreDisplay');
+  if (display) {
+    display.style.display = 'block';
+    document.getElementById('safetyScoreValue').textContent = score;
+  }
+}
+
+// ======================== FEATURE 6: PUNCH LIST ========================
+function loadPunchListFromStorage() {
+  const container = document.getElementById('punchlistContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  const items = JSON.parse(localStorage.getItem('fieldreport_punchlist') || '[]');
+  items.forEach(pl => {
+    const item = document.createElement('div');
+    item.className = 'punchlist-item ' + (pl.priority || 'medium');
+    item.innerHTML = `
+      <div class="punchlist-header">
+        <div><strong>${escapeHtml(pl.id || '')}</strong></div>
+        <select class="punchlist-status" onchange="this.parentElement.parentElement.className='punchlist-item '+this.value;savePunchList();">
+          <option value="open" ${pl.status==='open'?'selected':''}>Open</option>
+          <option value="in-progress" ${pl.status==='in-progress'?'selected':''}>In Progress</option>
+          <option value="closed" ${pl.status==='closed'?'selected':''}>Closed</option>
+        </select>
+      </div>
+      <input type="text" placeholder="Description" value="${escapeHtml(pl.description || '')}" style="width:100%;border:none;padding:4px 0;background:transparent;margin-bottom:4px;font-size:13px;" onchange="savePunchList()">
+      <input type="text" placeholder="Location/STA" value="${escapeHtml(pl.location || '')}" style="width:100%;border:none;padding:4px 0;background:transparent;margin-bottom:4px;font-size:13px;" onchange="savePunchList()">
+      <select style="width:100%;border:1px solid var(--border);padding:4px;margin-bottom:4px;font-size:13px;" onchange="this.parentElement.className='punchlist-item '+(this.value=='high'?'high':this.value=='low'?'low':'medium');savePunchList();">
+        <option value="medium" ${pl.priority==='medium'?'selected':''}>Priority: Medium</option>
+        <option value="high" ${pl.priority==='high'?'selected':''}>Priority: High</option>
+        <option value="low" ${pl.priority==='low'?'selected':''}>Priority: Low</option>
+      </select>
+      <button class="remove-btn" onclick="this.parentElement.remove();savePunchList();" style="margin-top:4px;">&times; Delete</button>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function addPunchListItem() {
+  const container = document.getElementById('punchlistContainer');
+  const id = 'PL' + Date.now();
+  const item = document.createElement('div');
+  item.className = 'punchlist-item medium';
+  item.innerHTML = `
+    <div class="punchlist-header">
+      <div><strong>${id}</strong></div>
+      <select class="punchlist-status" onchange="this.parentElement.parentElement.className='punchlist-item '+this.value;savePunchList();">
+        <option value="open">Open</option>
+        <option value="in-progress">In Progress</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+    <input type="text" placeholder="Description" style="width:100%;border:none;padding:4px 0;background:transparent;margin-bottom:4px;font-size:13px;">
+    <input type="text" placeholder="Location/STA" style="width:100%;border:none;padding:4px 0;background:transparent;margin-bottom:4px;font-size:13px;">
+    <select style="width:100%;border:1px solid var(--border);padding:4px;margin-bottom:4px;font-size:13px;" onchange="this.parentElement.className='punchlist-item '+(this.value=='high'?'high':this.value=='low'?'low':'medium');savePunchList();">
+      <option value="medium">Priority: Medium</option>
+      <option value="high">Priority: High</option>
+      <option value="low">Priority: Low</option>
+    </select>
+    <button class="remove-btn" onclick="this.parentElement.remove();savePunchList();" style="margin-top:4px;">&times; Delete</button>
+  `;
+  container.appendChild(item);
+  savePunchList();
+}
+
+function savePunchList() {
+  const items = [];
+  document.querySelectorAll('.punchlist-item').forEach(el => {
+    const inputs = el.querySelectorAll('input');
+    items.push({
+      id: el.querySelector('div div:first-child strong').textContent,
+      description: inputs[0].value,
+      location: inputs[1].value,
+      priority: el.querySelector('select').value,
+      status: el.querySelector('.punchlist-status').value
+    });
+  });
+  localStorage.setItem('fieldreport_punchlist', JSON.stringify(items));
+}
+
+// ======================== FEATURE 7: DASHBOARD ========================
+// ======================== FEATURE 8: SHARE PDF ========================
+async function sharePDF() {
+  showToast('Generating PDF for sharing...', '');
+  try {
+    const data = collectFormData();
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF();
+    doc.text('Daily Construction Inspection Report', 20, 20);
+    doc.text('Project: ' + (data.projectName || 'N/A'), 20, 30);
+    doc.text('Date: ' + (data.reportDate || 'N/A'), 20, 40);
+    const fileName = 'DailyReport_' + (data.reportDate || 'Report').replace(/\//g, '-') + '.pdf';
+    const blob = doc.output('blob');
+    const file = new File([blob], fileName, {type: 'application/pdf'});
+    if (navigator.share && navigator.canShare({files: [file]})) {
+      await navigator.share({title: 'Daily Report - ' + data.reportDate, files: [file]});
+      showToast('Report shared!', 'success');
+    } else {
+      doc.save(fileName);
+      showToast('PDF downloaded (sharing not supported)', 'warning');
+    }
+  } catch(e) {
+    showToast('Share failed: ' + e.message, 'error');
+  }
+}
+
+// ======================== FEATURE 9: ROLE PERMISSIONS ========================
+function applyRolePermissions() {
+  const role = localStorage.getItem('fieldreport_user_role') || 'Inspector';
+  const roleBadge = document.getElementById('roleBadge');
+  if (roleBadge) {
+    roleBadge.textContent = role;
+    roleBadge.style.display = 'inline-block';
+  }
+  const tabs = document.querySelectorAll('.nav-tab');
+  if (role === 'Foreman') {
+    tabs.forEach((t, i) => t.style.display = i >= 1 && i <= 5 ? 'flex' : 'none');
+  } else if (role === 'PM') {
+    tabs.forEach((t, i) => t.style.display = 'flex');
+  }
+}
+
+// ======================== FEATURE 10: PHOTO ANNOTATION ========================
+let annotationData = {canvas: null, ctx: null, tool: 'draw', img: null, gridId: null, photoIdx: null, history: []};
+
+function openAnnotation(gridId, idx) {
+  const grid = document.getElementById(gridId);
+  const img = grid.querySelectorAll('img')[idx];
+  if (!img) return;
+  const overlay = document.getElementById('annotationOverlay');
+  const canvas = document.getElementById('annotationCanvas');
+  const ctx = canvas.getContext('2d');
+  const image = new Image();
+  image.onload = () => {
+    canvas.width = image.width;
+    canvas.height = image.height;
+    ctx.drawImage(image, 0, 0);
+    annotationData = {canvas, ctx, tool: 'draw', img: image, gridId, photoIdx: idx, history: []};
+    overlay.classList.add('open');
+  };
+  image.src = img.src;
+}
+
+function setAnnotationTool(tool) {
+  annotationData.tool = tool;
+  document.querySelectorAll('.annotation-toolbar button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function undoAnnotation() {
+  if (annotationData.history.length > 0) {
+    annotationData.history.pop();
+    redrawAnnotationCanvas();
+  }
+}
+
+function redrawAnnotationCanvas() {
+  const {ctx, img, history} = annotationData;
+  ctx.clearRect(0, 0, annotationData.canvas.width, annotationData.canvas.height);
+  ctx.drawImage(img, 0, 0);
+  history.forEach(stroke => {
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = stroke.width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (stroke.type === 'line') {
+      ctx.beginPath();
+      ctx.moveTo(stroke.x1, stroke.y1);
+      ctx.lineTo(stroke.x2, stroke.y2);
+      ctx.stroke();
+    } else if (stroke.type === 'circle') {
+      ctx.beginPath();
+      ctx.arc(stroke.x, stroke.y, stroke.r, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+  });
+}
+
+function saveAnnotation() {
+  const canvas = annotationData.canvas;
+  const dataUrl = canvas.toDataURL('image/jpeg');
+  const grid = document.getElementById(annotationData.gridId);
+  const img = grid.querySelectorAll('img')[annotationData.photoIdx];
+  if (img) img.src = dataUrl;
+  cancelAnnotation();
+  showToast('Photo annotated!', 'success');
+}
+
+function cancelAnnotation() {
+  document.getElementById('annotationOverlay').classList.remove('open');
+  annotationData = {canvas: null, ctx: null, tool: 'draw', img: null, gridId: null, photoIdx: null, history: []};
+}
+
+// ======================== TOAST ========================
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (type || '') + ' show';
+  setTimeout(() => { t.classList.remove('show'); }, 3000);
+}
+
+// ======================== CLICK OUTSIDE MODAL ========================
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('open');
+  }
+});
+</script>
+</body></html>
