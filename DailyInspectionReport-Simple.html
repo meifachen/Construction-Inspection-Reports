@@ -3070,7 +3070,9 @@ async function generatePDF() {
   }
 
   const allPhotoSections = [
-    { key: 'sitePhotos', title: 'SITE PHOTO DOCUMENTATION' }{ key: 'deliveryPhotos', title: 'DELIVERY TICKET PHOTOS' }];
+    { key: 'sitePhotos', title: 'SITE PHOTO DOCUMENTATION' },
+    { key: 'deliveryPhotos', title: 'DELIVERY TICKET PHOTOS' }
+  ];
 
   for (const section of allPhotoSections) {
     const photos = data.photos[section.key] || [];
