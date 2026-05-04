@@ -819,12 +819,33 @@ body {
   justify-content: center;
 }
 
+/* ---- Responsive: Tablet ---- */
+@media (max-width: 768px) {
+  .ai-status-panel { width: 100%; }
+}
+
+/* ---- Responsive: Phone ---- */
 @media (max-width: 480px) {
   .form-row { grid-template-columns: 1fr; }
-  .form-row-3 { grid-template-columns: 1fr 1fr; }
+  .form-row-3 { grid-template-columns: 1fr; }
   .crew-table { font-size: 11px; }
   .crew-table th { padding: 6px 3px; font-size: 9px; }
-  .ai-status-panel { width: 100%; }
+  .equip-table { font-size: 11px; }
+  .equip-table th { padding: 6px 3px; font-size: 9px; }
+  .bottom-btn { font-size: 11px; padding: 6px 10px; }
+  .bottom-btn .btn-icon { font-size: 22px; }
+  .header-btn { padding: 8px 12px; }
+  .modal-content { max-width: 100%; border-radius: 12px 12px 0 0; }
+  .page-section { padding: 12px; }
+  .card { padding: 12px; }
+}
+
+/* ---- iOS: Prevent auto-zoom on input focus (requires >= 16px) ---- */
+@supports (-webkit-touch-callout: none) {
+  .form-input, .form-select, .form-textarea,
+  .crew-table td input, .equip-table td input, .equip-table td select {
+    font-size: 16px;
+  }
 }
 
 .offline-badge {
@@ -2164,20 +2185,23 @@ let activeVoiceBtn = null;
 
 function voiceInput(fieldId) {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('Voice input not supported in this browser', 'error');
+    showToast('Voice input not supported. Use Chrome, Edge, or Safari.', 'error');
     return;
   }
 
   const field = document.getElementById(fieldId);
+  if (!field) return;
   const btn = field.parentElement.querySelector('.voice-btn');
 
+  // Toggle off if already recording this field
   if (recognition && activeVoiceBtn === btn) {
     recognition.stop();
     return;
   }
 
+  // Stop any existing recognition
   if (recognition) {
-    recognition.stop();
+    try { recognition.stop(); } catch(e) {}
     if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
   }
 
@@ -2203,6 +2227,10 @@ function voiceInput(fieldId) {
     }
     const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
     field.value = startValue + sep + finalTranscript + interim;
+    // Scroll textarea to bottom as text is added
+    if (field.tagName === 'TEXTAREA') {
+      field.scrollTop = field.scrollHeight;
+    }
   };
 
   recognition.onend = () => {
@@ -2217,13 +2245,26 @@ function voiceInput(fieldId) {
     btn.classList.remove('recording');
     recognition = null;
     activeVoiceBtn = null;
-    if (e.error !== 'aborted') {
+    if (e.error === 'not-allowed') {
+      showToast('Microphone access denied. Check browser permissions.', 'error');
+    } else if (e.error === 'no-speech') {
+      showToast('No speech detected. Tap mic to try again.', 'error');
+    } else if (e.error === 'network') {
+      showToast('Network error — speech recognition needs internet.', 'error');
+    } else if (e.error !== 'aborted') {
       showToast('Voice error: ' + e.error, 'error');
     }
   };
 
-  recognition.start();
-  showToast('Listening...', 'success');
+  try {
+    recognition.start();
+    showToast('Listening... Tap mic again to stop.', 'success');
+  } catch(e) {
+    btn.classList.remove('recording');
+    recognition = null;
+    activeVoiceBtn = null;
+    showToast('Could not start microphone: ' + e.message, 'error');
+  }
 }
 
 // ======================== PHOTO HANDLING ========================
@@ -3252,9 +3293,16 @@ async function autoFillWeather() {
 // ======================== FEATURE 3: SMART DICTATE ========================
 async function smartDictate() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('Voice input not supported in your browser', 'error');
+    showToast('Voice input not supported in your browser. Use Chrome or Edge.', 'error');
     return;
   }
+
+  const aiProvider = aiProviders.find(p => p.active) || aiProviders[0];
+  if (!aiProvider || !aiProvider.apiKey) {
+    showToast('No AI provider configured. Set up in Settings first.', 'error');
+    return;
+  }
+
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
   recognition.continuous = false;
@@ -3262,37 +3310,61 @@ async function smartDictate() {
   recognition.lang = 'en-US';
 
   showToast('Listening... Speak freely about today\'s work', '');
+
   recognition.onresult = async (event) => {
     const transcript = Array.from(event.results)
       .map(result => result[0].transcript)
       .join('');
-    showToast('Processing dictation...', '');
+    showToast('Processing dictation with AI...', '');
     try {
-      const aiProvider = aiProviders[0];
-      if (!aiProvider) {
-        showToast('No AI provider configured', 'error');
-        return;
-      }
-      const prompt = `Parse this construction inspection dictation into JSON fields. Extract: workPerformed, weather (sunny/cloudy/rain), tempHigh, tempLow, crewCount, changeOrders, safetyIssues, testsPerformed. Return ONLY valid JSON with no markdown. Dictation: "${transcript}"`;
-      const response = await fetch('/api/ai', {
+      const prompt = `Parse this construction inspection dictation into JSON fields. Extract: workPerformed, weather (sunny/cloudy/rain), tempHigh, tempLow, crewCount, changeOrders, testsPerformed, lookAhead. Return ONLY valid JSON with no markdown. Dictation: "${transcript}"`;
+      const response = await fetch(aiProvider.endpoint, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({provider: aiProvider.name, prompt: prompt, apiKey: aiProvider.apiKey})
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + aiProvider.apiKey
+        },
+        body: JSON.stringify({
+          model: aiProvider.model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.2,
+          max_tokens: 1024
+        })
       });
-      if (!response.ok) throw new Error('AI API failed');
+      if (!response.ok) throw new Error('AI API returned ' + response.status);
       const result = await response.json();
-      const parsed = JSON.parse(result.text);
+      const aiText = result.choices?.[0]?.message?.content || '';
+      // Extract JSON from response (handle possible markdown code fences)
+      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON in AI response');
+      const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.workPerformed) document.getElementById('workPerformed').value = parsed.workPerformed;
-      if (parsed.changeOrders) document.getElementById('changeOrders').value = parsed.changeOrders;if (parsed.testsPerformed) document.getElementById('testsPerformed').value = parsed.testsPerformed;
+      if (parsed.changeOrders) document.getElementById('changeOrders').value = parsed.changeOrders;
+      if (parsed.testsPerformed) document.getElementById('testsPerformed').value = parsed.testsPerformed;
+      if (parsed.lookAhead) document.getElementById('lookAhead').value = parsed.lookAhead;
       if (parsed.tempHigh) document.getElementById('tempHigh').value = parsed.tempHigh;
       if (parsed.tempLow) document.getElementById('tempLow').value = parsed.tempLow;
-      if (parsed.crewCount) document.getElementById('crewCount').value = parsed.crewCount;
       showToast('Dictation parsed and fields filled!', 'success');
     } catch(e) {
       showToast('AI parsing failed: ' + e.message, 'error');
     }
   };
-  recognition.start();
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed') {
+      showToast('Microphone access denied. Please allow microphone in browser settings.', 'error');
+    } else if (e.error === 'no-speech') {
+      showToast('No speech detected. Please try again.', 'error');
+    } else if (e.error !== 'aborted') {
+      showToast('Voice error: ' + e.error, 'error');
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch(e) {
+    showToast('Could not start microphone: ' + e.message, 'error');
+  }
 }
 
 // ======================== FEATURE 4: PAY ITEMS ========================
@@ -4011,6 +4083,7 @@ document.addEventListener('click', (e) => {
     }
   }, 500);
 })();
+
 
 </script>
 </body></html>
