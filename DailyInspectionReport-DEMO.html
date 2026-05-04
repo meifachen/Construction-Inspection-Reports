@@ -1931,7 +1931,7 @@ body.offline .offline-badge {
 
     <div style="margin-bottom:24px;">
       <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">User Role</h4>
-      <select class="form-input" id="userRoleSelect" onchange="localStorage.setItem('fieldreport_user_role',this.value);applyRolePermissions();">
+      <select class="form-input" id="userRoleSelect" onchange="safeSetItem('fieldreport_user_role',this.value);applyRolePermissions();">
         <option value="Inspector">Inspector (Full Access)</option>
         <option value="Superintendent">Superintendent (View/Edit)</option>
         <option value="Foreman">Foreman (Limited Access)</option>
@@ -2005,6 +2005,43 @@ body.offline .offline-badge {
 </div>
 
 <script>
+// ======================== ERROR HANDLER (iOS DEBUG) ========================
+window.onerror = function(msg, url, line, col, err) {
+  var el = document.getElementById('startupError');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'startupError';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee;color:#900;padding:12px;font-size:14px;border-bottom:2px solid #c00;max-height:40vh;overflow:auto;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML += '<b>Error:</b> ' + msg + ' (line ' + line + ')<br>';
+  return false;
+};
+
+// ======================== SAFE STORAGE WRAPPER ========================
+var _storageAvailable = null;
+function isStorageAvailable() {
+  if (_storageAvailable !== null) return _storageAvailable;
+  try {
+    var t = '__storage_test__';
+    localStorage.setItem(t, t);
+    localStorage.removeItem(t);
+    _storageAvailable = true;
+  } catch(e) {
+    _storageAvailable = false;
+  }
+  return _storageAvailable;
+}
+function safeGetItem(key) {
+  try { return isStorageAvailable() ? localStorage.getItem(key) : null; } catch(e) { return null; }
+}
+function safeSetItem(key, value) {
+  try { if (isStorageAvailable()) localStorage.setItem(key, value); } catch(e) {}
+}
+function safeRemoveItem(key) {
+  try { if (isStorageAvailable()) localStorage.removeItem(key); } catch(e) {}
+}
+
 // ======================== STATE ========================
 let currentReportId = null;
 let photoData = {
@@ -2018,7 +2055,14 @@ let signatureData = null;
 let aiProviders = [];
 
 // ======================== INIT ========================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    if (!isStorageAvailable()) {
+      var warn = document.createElement('div');
+      warn.style.cssText = 'background:#fff3cd;color:#856404;padding:10px 16px;font-size:13px;border-bottom:1px solid #ffc107;text-align:center;';
+      warn.textContent = 'Storage unavailable (file:// mode). Reports will not be saved. For full functionality, open via a web server or GitHub Pages.';
+      document.body.insertBefore(warn, document.body.firstChild);
+    }
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0];
   document.getElementById('reportDate').value = dateStr;
@@ -2036,11 +2080,21 @@ document.addEventListener('DOMContentLoaded', () => {
   applyRolePermissions();
   loadPunchListFromStorage();
 
-  setInterval(() => {
+  setInterval(function() {
     if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
       autoSave();
     }
   }, 60000);
+  } catch(e) {
+    var errEl = document.getElementById('startupError');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.id = 'startupError';
+      errEl.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee;color:#900;padding:12px;font-size:14px;border-bottom:2px solid #c00;';
+      document.body.appendChild(errEl);
+    }
+    errEl.innerHTML += '<b>Init Error:</b> ' + e.message + '<br>';
+  }
 });
 
 function updateDayOfWeek() {
@@ -2061,7 +2115,7 @@ function calcRemaining() {
 // ======================== AI PROVIDERS ========================
 function loadAIProviders() {
   try {
-    aiProviders = JSON.parse(localStorage.getItem('fieldreport_ai_providers') || '[]');
+    aiProviders = JSON.parse(safeGetItem('fieldreport_ai_providers') || '[]');
   } catch(e) {
     aiProviders = [];
   }
@@ -2073,7 +2127,7 @@ function loadAIProviders() {
 }
 
 function saveAIProviders() {
-  localStorage.setItem('fieldreport_ai_providers', JSON.stringify(aiProviders));
+  safeSetItem('fieldreport_ai_providers', JSON.stringify(aiProviders));
   updateAIStatus();
 }
 
@@ -2681,7 +2735,7 @@ function clearSignature() {
 // ======================== SETTINGS ========================
 function loadSettings() {
   try {
-    const s = JSON.parse(localStorage.getItem('fieldreport_settings') || '{}');
+    const s = JSON.parse(safeGetItem('fieldreport_settings') || '{}');
     if (s.company) document.getElementById('contractor').value = s.company;
     if (s.inspector) document.getElementById('inspector').value = s.inspector;
     if (s.project) document.getElementById('projectName').value = s.project;
@@ -2691,7 +2745,7 @@ function loadSettings() {
     if (s.logo) document.getElementById('settLogo').value = s.logo;
     if (s.owner) document.getElementById('settOwner').value = s.owner;
     if (s.engineer) document.getElementById('settEngineer').value = s.engineer;
-    const role = localStorage.getItem('fieldreport_user_role') || 'Inspector';
+    const role = safeGetItem('fieldreport_user_role') || 'Inspector';
     document.getElementById('userRoleSelect').value = role;
   } catch(e) {}
 }
@@ -2705,7 +2759,7 @@ function saveSettings() {
     owner: document.getElementById('settOwner').value,
     engineer: document.getElementById('settEngineer').value
   };
-  localStorage.setItem('fieldreport_settings', JSON.stringify(s));
+  safeSetItem('fieldreport_settings', JSON.stringify(s));
   closeModal('settingsModal');
   showToast('Settings saved!', 'success');
 }
@@ -2760,9 +2814,9 @@ function collectFormData() {
     safetyIssues: document.getElementById('safetyIssues').value,
     payItems: getPayItemsData(),
     checklists: getChecklistsData(),
-    punchlist: JSON.parse(localStorage.getItem('fieldreport_punchlist') || '[]'),
+    punchlist: JSON.parse(safeGetItem('fieldreport_punchlist') || '[]'),
     preparedBy: document.getElementById('preparedBy').value,
-    userRole: localStorage.getItem('fieldreport_user_role') || 'Inspector',
+    userRole: safeGetItem('fieldreport_user_role') || 'Inspector',
     photos: photoData,
     signature: signatureData
   };
@@ -2796,9 +2850,9 @@ function getListItems(listId) {
 function saveDraft() {
   const data = collectFormData();
   data.status = 'draft';
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   drafts[data.id] = data;
-  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  safeSetItem('fieldreport_drafts', JSON.stringify(drafts));
   showToast('Draft saved!', 'success');
 }
 
@@ -2806,16 +2860,16 @@ function autoSave() {
   try {
     const data = collectFormData();
     data.status = 'draft';
-    const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+    const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
     drafts[data.id] = data;
-    localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+    safeSetItem('fieldreport_drafts', JSON.stringify(drafts));
   } catch(e) {}
 }
 
 function showDrafts() {
   document.getElementById('submittedList').style.display = 'none';
   const container = document.getElementById('draftsContainer');
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const keys = Object.keys(drafts).filter(k => drafts[k].status === 'draft');
 
   if (keys.length === 0) {
@@ -2841,7 +2895,7 @@ function showDrafts() {
 function showSubmitted() {
   document.getElementById('draftsList').style.display = 'none';
   const container = document.getElementById('submittedContainer');
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const keys = Object.keys(drafts).filter(k => drafts[k].status === 'submitted');
 
   if (keys.length === 0) {
@@ -2862,7 +2916,7 @@ function showSubmitted() {
 }
 
 function loadReport(id) {
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const data = drafts[id];
   if (!data) return;
   currentReportId = id;
@@ -2877,9 +2931,9 @@ function loadReport(id) {
 
 function deleteReport(id) {
   if (!confirm('Delete this report?')) return;
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   delete drafts[id];
-  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  safeSetItem('fieldreport_drafts', JSON.stringify(drafts));
   showDrafts();
 }
 
@@ -2972,7 +3026,7 @@ function populateForm(d) {
 
   // Restore user role
   if (d.userRole) {
-    localStorage.setItem('fieldreport_user_role', d.userRole);
+    safeSetItem('fieldreport_user_role', d.userRole);
     const roleSelect = document.getElementById('userRoleSelect');
     if (roleSelect) { roleSelect.value = d.userRole; applyRolePermissions(); }
   }
@@ -3013,7 +3067,7 @@ function populateForm(d) {
 
   // Restore punchlist
   if (d.punchlist && d.punchlist.length > 0) {
-    localStorage.setItem('fieldreport_punchlist', JSON.stringify(d.punchlist));
+    safeSetItem('fieldreport_punchlist', JSON.stringify(d.punchlist));
     loadPunchListFromStorage();
   }
 
@@ -3051,9 +3105,9 @@ function submitReport() {
   if (!data.projectName) { showToast('Please enter Project Name', 'error'); showTab(0); return; }
   if (!data.reportDate) { showToast('Please enter Date', 'error'); showTab(0); return; }
   data.status = 'submitted';
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   drafts[data.id] = data;
-  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  safeSetItem('fieldreport_drafts', JSON.stringify(drafts));
   generatePDF();
   showToast('Report submitted!', 'success');
 }
@@ -3113,7 +3167,7 @@ async function generatePDF() {
   doc.text('DAILY REPORT OF CONSTRUCTION ACTIVITY', pw / 2, 10, { align: 'center' });
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const settings = JSON.parse(localStorage.getItem('fieldreport_settings') || '{}');
+  const settings = JSON.parse(safeGetItem('fieldreport_settings') || '{}');
   doc.text(settings.owner || 'Construction Inspection Report', pw / 2, 17, { align: 'center' });
   doc.setTextColor(0, 0, 0);
 
@@ -3533,7 +3587,7 @@ async function generateQRCode(text, size) {
 // ======================== FEATURE 1: TEMPLATE ========================
 function showTemplateSelector() {
   const container = document.getElementById('templateContainer');
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const keys = Object.keys(drafts);
 
   if (keys.length === 0) {
@@ -3556,7 +3610,7 @@ function showTemplateSelector() {
 }
 
 function cloneAsTemplate(templateId) {
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const template = drafts[templateId];
   if (!template) return;
 
@@ -3603,7 +3657,7 @@ function cloneAsTemplate(templateId) {
   };
 
   drafts[newId] = newData;
-  localStorage.setItem('fieldreport_drafts', JSON.stringify(drafts));
+  safeSetItem('fieldreport_drafts', JSON.stringify(drafts));
 
   currentReportId = newId;
   resetForm();
@@ -3618,12 +3672,12 @@ function cloneAsTemplate(templateId) {
 // ======================== FEATURE 2: EXPORT/IMPORT ========================
 function exportAllReports() {
   const data = {
-    fieldreport_drafts: localStorage.getItem('fieldreport_drafts') || '{}',
-    fieldreport_settings: localStorage.getItem('fieldreport_settings') || '{}',
-    fieldreport_ai_providers: localStorage.getItem('fieldreport_ai_providers') || '[]',
-    fieldreport_punchlist: localStorage.getItem('fieldreport_punchlist') || '[]',
-    fieldreport_pay_items: localStorage.getItem('fieldreport_pay_items') || '[]',
-    fieldreport_user_role: localStorage.getItem('fieldreport_user_role') || 'Inspector',
+    fieldreport_drafts: safeGetItem('fieldreport_drafts') || '{}',
+    fieldreport_settings: safeGetItem('fieldreport_settings') || '{}',
+    fieldreport_ai_providers: safeGetItem('fieldreport_ai_providers') || '[]',
+    fieldreport_punchlist: safeGetItem('fieldreport_punchlist') || '[]',
+    fieldreport_pay_items: safeGetItem('fieldreport_pay_items') || '[]',
+    fieldreport_user_role: safeGetItem('fieldreport_user_role') || 'Inspector',
     exportDate: new Date().toISOString()
   };
 
@@ -3647,7 +3701,7 @@ function importReports(event) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      const existingDrafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+      const existingDrafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
       const importedDrafts = JSON.parse(data.fieldreport_drafts || '{}');
 
       let importCount = 0;
@@ -3658,22 +3712,22 @@ function importReports(event) {
         }
       }
 
-      localStorage.setItem('fieldreport_drafts', JSON.stringify(existingDrafts));
+      safeSetItem('fieldreport_drafts', JSON.stringify(existingDrafts));
 
       if (data.fieldreport_settings) {
-        localStorage.setItem('fieldreport_settings', data.fieldreport_settings);
+        safeSetItem('fieldreport_settings', data.fieldreport_settings);
       }
       if (data.fieldreport_ai_providers) {
-        localStorage.setItem('fieldreport_ai_providers', data.fieldreport_ai_providers);
+        safeSetItem('fieldreport_ai_providers', data.fieldreport_ai_providers);
       }
       if (data.fieldreport_punchlist) {
-        localStorage.setItem('fieldreport_punchlist', data.fieldreport_punchlist);
+        safeSetItem('fieldreport_punchlist', data.fieldreport_punchlist);
       }
       if (data.fieldreport_pay_items) {
-        localStorage.setItem('fieldreport_pay_items', data.fieldreport_pay_items);
+        safeSetItem('fieldreport_pay_items', data.fieldreport_pay_items);
       }
       if (data.fieldreport_user_role) {
-        localStorage.setItem('fieldreport_user_role', data.fieldreport_user_role);
+        safeSetItem('fieldreport_user_role', data.fieldreport_user_role);
       }
 
       document.getElementById('importFileInput').value = '';
@@ -3691,7 +3745,7 @@ function openMonthlySummary() {
   const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
   document.getElementById('summaryMonthInput').value = currentMonth;
 
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const projects = new Set();
   for (const id in drafts) {
     if (drafts[id].projectName) {
@@ -3717,7 +3771,7 @@ function generateMonthlySummary() {
   }
 
   const [year, month] = monthStr.split('-').map(Number);
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
 
   const reports = Object.values(drafts).filter(d => {
     if (!d.reportDate) return false;
@@ -4451,7 +4505,7 @@ function getPayItemsData() {
 
 function addPayItem() {
   const tbody = document.getElementById('payItemsBody');
-  const defaultItems = JSON.parse(localStorage.getItem('fieldreport_pay_items') || '[]');
+  const defaultItems = JSON.parse(safeGetItem('fieldreport_pay_items') || '[]');
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input type="text" placeholder="1" style="width:100%;border:none;padding:4px;background:transparent;font-size:13px;"></td>
@@ -4520,7 +4574,7 @@ function loadPunchListFromStorage() {
   const container = document.getElementById('punchlistContainer');
   if (!container) return;
   container.innerHTML = '';
-  const items = JSON.parse(localStorage.getItem('fieldreport_punchlist') || '[]');
+  const items = JSON.parse(safeGetItem('fieldreport_punchlist') || '[]');
   items.forEach(pl => {
     const item = document.createElement('div');
     item.className = 'punchlist-item ' + (pl.priority || 'medium');
@@ -4585,7 +4639,7 @@ function savePunchList() {
       status: el.querySelector('.punchlist-status').value
     });
   });
-  localStorage.setItem('fieldreport_punchlist', JSON.stringify(items));
+  safeSetItem('fieldreport_punchlist', JSON.stringify(items));
 }
 
 // ======================== FEATURE 7: DASHBOARD ========================
@@ -4596,7 +4650,7 @@ function showDashboard() {
 }
 
 function renderDashboardCharts() {
-  const drafts = JSON.parse(localStorage.getItem('fieldreport_drafts') || '{}');
+  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
   const reports = Object.values(drafts);
 
   // KPI Cards
@@ -4741,7 +4795,7 @@ async function sharePDF() {
 
 // ======================== FEATURE 9: ROLE PERMISSIONS ========================
 function applyRolePermissions() {
-  const role = localStorage.getItem('fieldreport_user_role') || 'Inspector';
+  const role = safeGetItem('fieldreport_user_role') || 'Inspector';
   const roleBadge = document.getElementById('roleBadge');
   if (roleBadge) {
     roleBadge.textContent = role;
@@ -4845,7 +4899,7 @@ document.addEventListener('click', (e) => {
 // ======================== DEMO DATA LOADER ========================
 (function loadDemoData() {
   // Skip if already loaded
-  if (localStorage.getItem('fieldreport_demo_loaded')) return;
+  if (safeGetItem('fieldreport_demo_loaded')) return;
   
   // Base project info
   const baseProjectInfo = {
@@ -5350,13 +5404,13 @@ document.addEventListener('click', (e) => {
   ];
 
   // Save all to localStorage (object keyed by ID, matching saveDraft() format)
-  localStorage.setItem('fieldreport_drafts', JSON.stringify(allDrafts));
-  localStorage.setItem('fieldreport_pay_items', JSON.stringify(payItems));
-  localStorage.setItem('fieldreport_settings', JSON.stringify(settings));
-  localStorage.setItem('fieldreport_ai_providers', JSON.stringify(aiProviders));
-  localStorage.setItem('fieldreport_punchlist', JSON.stringify(punchList));
-  localStorage.setItem('fieldreport_user_role', 'Inspector');
-  localStorage.setItem('fieldreport_demo_loaded', 'true');
+  safeSetItem('fieldreport_drafts', JSON.stringify(allDrafts));
+  safeSetItem('fieldreport_pay_items', JSON.stringify(payItems));
+  safeSetItem('fieldreport_settings', JSON.stringify(settings));
+  safeSetItem('fieldreport_ai_providers', JSON.stringify(aiProviders));
+  safeSetItem('fieldreport_punchlist', JSON.stringify(punchList));
+  safeSetItem('fieldreport_user_role', 'Inspector');
+  safeSetItem('fieldreport_demo_loaded', 'true');
 
   // Auto-show drafts after DOM is ready
   setTimeout(() => {
