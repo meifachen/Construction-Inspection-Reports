@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Daily Construction Inspection Report</title>
@@ -2382,11 +2382,22 @@ function newReport() {
 let recognition = null;
 let activeVoiceBtn = null;
 
-function voiceInput(fieldId) {
+// Check if we're in a secure context (required for microphone on mobile)
+function checkVoiceSupport() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     showToast('Voice input not supported. Use Chrome, Edge, or Safari.', 'error');
-    return;
+    return false;
   }
+  // Mobile browsers require HTTPS for microphone access
+  if (window.isSecureContext === false || (location.protocol !== 'https:' && location.protocol !== 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')) {
+    showToast('Microphone requires HTTPS. Open via a web server or use GitHub Pages.', 'error');
+    return false;
+  }
+  return true;
+}
+
+function voiceInput(fieldId) {
+  if (!checkVoiceSupport()) return;
 
   const field = document.getElementById(fieldId);
   if (!field) return;
@@ -4286,23 +4297,18 @@ function generateMonthlySummaryPDF() {
   showToast('Monthly summary PDF generated: ' + fileName, 'success');
 }
 
-// ======================== FEATURE 1: OFFLINE PWA + SERVICE WORKER ========================
+// ======================== FEATURE 1: OFFLINE SUPPORT ========================
+// NOTE: Service worker requires HTTPS and a separate .js file.
+// For standalone HTML (file:// or local server), we rely on browser cache
+// and localStorage. Online/offline detection still works below.
 function initServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    const swCode = `
-const CACHE_NAME = 'fieldreport-v3';
-const URLS_TO_CACHE = [
-  './',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'
-];
-self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(URLS_TO_CACHE).catch(() => {}))));
-self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)).catch(() => new Response('Offline'))));
-    `;
+  // Only attempt SW registration on HTTPS (not file:// or localhost)
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
     try {
-      const swBlob = new Blob([swCode], {type: 'application/javascript'});
-      navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+      // Service worker must be a separate file on same origin for iOS Safari compatibility.
+      // Blob URL registration is NOT supported on iOS Safari and causes SecurityError.
+      // If deploying to a web server, create a sw.js file with cache-first strategy.
+      // navigator.serviceWorker.register('./sw.js').catch(() => {});
     } catch(e) {}
   }
 }
@@ -4352,10 +4358,7 @@ async function autoFillWeather() {
 
 // ======================== FEATURE 3: SMART DICTATE ========================
 async function smartDictate() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('Voice input not supported in your browser. Use Chrome or Edge.', 'error');
-    return;
-  }
+  if (!checkVoiceSupport()) return;
 
   const aiProvider = aiProviders.find(p => p.active) || aiProviders[0];
   if (!aiProvider || !aiProvider.apiKey) {
