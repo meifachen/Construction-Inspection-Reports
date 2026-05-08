@@ -7,6 +7,28 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>Daily Inspection Report - Lite</title>
 
+<!-- Early error capture: registered BEFORE any other script so parse errors in CDN scripts or inline blocks below surface visibly on iOS Safari instead of silently breaking onclick handlers. -->
+<script>
+(function(){
+  function showErr(msg, src){
+    try {
+      var el = document.getElementById('startupError');
+      if (!el) {
+        if (!document.body) { document.addEventListener('DOMContentLoaded', function(){ showErr(msg, src); }); return; }
+        el = document.createElement('div');
+        el.id = 'startupError';
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee;color:#900;padding:12px;font-size:14px;border-bottom:2px solid #c00;max-height:40vh;overflow:auto;font-family:-apple-system,sans-serif;';
+        document.body.appendChild(el);
+      }
+      el.innerHTML += '<b>Error:</b> ' + msg + (src ? ' [' + src + ']' : '') + '<br>';
+    } catch(e) {}
+  }
+  window.onerror = function(msg, url, line, col, err){ showErr(msg + ' (line ' + line + ')', ''); return false; };
+  window.addEventListener('unhandledrejection', function(ev){ showErr('Promise: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason), ''); });
+  window.__showStartupError = showErr;
+})();
+</script>
+
 <!-- jsPDF + autoTable for PDF generation -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -1117,12 +1139,12 @@ try { document.body.setAttribute('data-js', 'ok'); } catch(e) {}
   <div class="home-logo">FieldReport Pro</div>
   <div class="home-sub">Daily Construction Inspection Reports</div>
 
-  <button class="home-btn highlight" onclick="newReport()">
+  <button id="btnNewReport" class="home-btn highlight" onclick="newReport()">
     <span>New Daily Report</span>
     <span class="hb-icon">></span>
   </button>
-  
-  <button class="home-btn" onclick="showSubmitted()">
+
+  <button id="btnShowSubmitted" class="home-btn" onclick="showSubmitted()">
     <span>Submitted Reports</span>
     <span class="hb-icon">></span>
   </button>
@@ -1131,6 +1153,22 @@ try { document.body.setAttribute('data-js', 'ok'); } catch(e) {}
     <h3 style="margin-bottom:10px;">Submitted Reports</h3>
     <div id="submittedContainer"></div>
     <button class="btn-primary btn-block" style="margin-top:12px" onclick="document.getElementById('submittedList').style.display='none'">Close</button>
+  </div>
+
+  <!-- Diagnostic readout: shows JS state on the home screen so we can see what's happening when buttons don't respond on iPhone or odd WebViews. Click to expand. -->
+  <div id="diagBlock" style="margin-top:24px;font-size:11px;color:#666;text-align:left;padding:8px 12px;background:#f7fafc;border-radius:6px;border:1px solid #e2e8f0;">
+    <div onclick="(function(){var d=document.getElementById('diagDetails');d.style.display=d.style.display==='none'?'block':'none';})()" style="cursor:pointer;font-weight:600;">Diagnostics ▾</div>
+    <div id="diagDetails" style="display:none;margin-top:8px;line-height:1.6;font-family:monospace;">
+      <span id="diagJS">JS: …</span><br>
+      <span id="diagInit">Init: …</span><br>
+      <span id="diagProto">Proto: …</span><br>
+      <span id="diagSecure">Secure: …</span><br>
+      <span id="diagSR">SpeechRec: …</span><br>
+      <span id="diagMD">getUserMedia: …</span><br>
+      <span id="diagStorage">Storage: …</span><br>
+      <span id="diagClicks">Click count: 0</span><br>
+      <span id="diagUA">UA: …</span>
+    </div>
   </div>
 </div>
 
@@ -1827,18 +1865,7 @@ try { document.body.setAttribute('data-js', 'ok'); } catch(e) {}
 </div>
 
 <script>
-// ======================== ERROR HANDLER (iOS DEBUG) ========================
-window.onerror = function(msg, url, line, col, err) {
-  var el = document.getElementById('startupError');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'startupError';
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee;color:#900;padding:12px;font-size:14px;border-bottom:2px solid #c00;max-height:40vh;overflow:auto;';
-    document.body.appendChild(el);
-  }
-  el.innerHTML += '<b>Error:</b> ' + msg + ' (line ' + line + ')<br>';
-  return false;
-};
+// Error handler is registered in <head> (window.onerror + window.__showStartupError).
 
 // ======================== SAFE STORAGE WRAPPER ========================
 var _storageAvailable = null;
@@ -1864,6 +1891,48 @@ function safeRemoveItem(key) {
   try { if (isStorageAvailable()) localStorage.removeItem(key); } catch(e) {}
 }
 
+// ======================== DIAGNOSTICS / FALLBACK BUTTON WIRING ========================
+// On some WebViews (WhatsApp viewer, in-app browsers, older iOS) the inline onclick=""
+// handler can be stripped by Content-Security-Policy or fail to bind. addEventListener
+// runs in addition so the button still works.
+var __diagClicks = 0;
+function wireHomeButtons() {
+  var n = document.getElementById('btnNewReport');
+  var s = document.getElementById('btnShowSubmitted');
+  function bind(el, handler) {
+    if (!el) return;
+    var fired = false;
+    function go(ev) {
+      if (fired) return; fired = true;
+      __diagClicks++;
+      var c = document.getElementById('diagClicks');
+      if (c) c.textContent = 'Click count: ' + __diagClicks;
+      try { handler(); } catch(e) {
+        if (window.__showStartupError) window.__showStartupError('handler: ' + e.message);
+      }
+      setTimeout(function(){ fired = false; }, 400);
+    }
+    el.addEventListener('click', go);
+    el.addEventListener('touchend', function(ev){ ev.preventDefault(); go(ev); }, { passive: false });
+  }
+  bind(n, function(){ if (typeof newReport === 'function') newReport(); });
+  bind(s, function(){ if (typeof showSubmitted === 'function') showSubmitted(); });
+}
+
+function renderDiagnostics() {
+  var set = function(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('diagJS',      'JS: ok');
+  set('diagInit',    'Init: ' + (window.__initDone ? 'ok' : 'pending'));
+  set('diagProto',   'Proto: ' + location.protocol);
+  set('diagSecure',  'Secure: ' + (window.isSecureContext ? 'yes' : 'no'));
+  var hasSR = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+  set('diagSR',      'SpeechRec: ' + (hasSR ? 'yes' : 'no'));
+  var hasMD = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  set('diagMD',      'getUserMedia: ' + (hasMD ? 'yes' : 'no'));
+  set('diagStorage', 'Storage: ' + (isStorageAvailable() ? 'ok' : 'unavailable'));
+  set('diagUA',      'UA: ' + (navigator.userAgent || 'unknown').slice(0, 90));
+}
+
 // ======================== STATE ========================
 let currentReportId = null;
 let photoData = { sitePhotos: [], deliveryPhotos: [] };
@@ -1871,7 +1940,9 @@ let signatureData = null;
 let aiProviders = [];
 
 // ======================== INIT ========================
-document.addEventListener('DOMContentLoaded', function() {
+function __initApp() {
+  if (window.__initDone) return;
+  window.__initDone = true;
   try {
     var today = new Date();
     var dateStr = today.toISOString().split('T')[0];
@@ -1891,13 +1962,20 @@ document.addEventListener('DOMContentLoaded', function() {
       warn.textContent = 'Storage unavailable (file:// mode). Reports will not be saved. For full functionality, open via a web server or GitHub Pages.';
       document.body.insertBefore(warn, document.body.firstChild);
     }
-    loadSettings();
-    loadAIProviders();
-    updateAIStatus();
-    initSignature();
-    initServiceWorker();
-    applyRolePermissions();
-    loadPunchListFromStorage();
+    // Each init step in its own try block: a single broken sub-init can no longer leave the page with handler functions undefined.
+    try { loadSettings(); } catch(e) { if (window.__showStartupError) window.__showStartupError('loadSettings: ' + e.message); }
+    try { loadAIProviders(); } catch(e) { if (window.__showStartupError) window.__showStartupError('loadAIProviders: ' + e.message); }
+    try { updateAIStatus(); } catch(e) { if (window.__showStartupError) window.__showStartupError('updateAIStatus: ' + e.message); }
+    try { initSignature(); } catch(e) { if (window.__showStartupError) window.__showStartupError('initSignature: ' + e.message); }
+    try { initServiceWorker(); } catch(e) { if (window.__showStartupError) window.__showStartupError('initServiceWorker: ' + e.message); }
+    try { applyRolePermissions(); } catch(e) { if (window.__showStartupError) window.__showStartupError('applyRolePermissions: ' + e.message); }
+    try { loadPunchListFromStorage(); } catch(e) { if (window.__showStartupError) window.__showStartupError('loadPunchListFromStorage: ' + e.message); }
+
+    // Backup click bindings for the home buttons. If onclick="" silently fails (some WebViews
+    // strip inline handlers, or the script's own newReport assignment to window doesn't stick),
+    // these listeners still route taps to the right function.
+    try { wireHomeButtons(); } catch(e) { if (window.__showStartupError) window.__showStartupError('wireHomeButtons: ' + e.message); }
+    try { renderDiagnostics(); } catch(e) {}
 
     setInterval(function() {
       if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
@@ -1905,16 +1983,15 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }, 60000);
   } catch(e) {
-    var errEl = document.getElementById('startupError');
-    if (!errEl) {
-      errEl = document.createElement('div');
-      errEl.id = 'startupError';
-      errEl.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee;color:#900;padding:12px;font-size:14px;border-bottom:2px solid #c00;';
-      document.body.appendChild(errEl);
-    }
-    errEl.innerHTML += '<b>Init Error:</b> ' + e.message + '<br>';
+    if (window.__showStartupError) window.__showStartupError('Init Error: ' + e.message);
   }
-});
+}
+// Fire init even if DOMContentLoaded already fired (iOS WKWebView from Files app sometimes parses inline script after the event).
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', __initApp);
+} else {
+  setTimeout(__initApp, 0);
+}
 
 function updateDayOfWeek() {
   const d = document.getElementById('reportDate').value;
@@ -2231,23 +2308,38 @@ function showTab(idx) {
 }
 
 function goHome() {
-  if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
-    autoSave();
+  try {
+    if (currentReportId && document.getElementById('reportForm').style.display !== 'none') {
+      autoSave();
+    }
+    var home = document.getElementById('homeScreen');
+    var form = document.getElementById('reportForm');
+    if (home) home.style.display = 'block';
+    if (form) form.style.display = 'none';
+  } catch(e) {
+    if (window.__showStartupError) window.__showStartupError('goHome: ' + e.message);
   }
-  document.getElementById('homeScreen').style.display = 'block';
-  document.getElementById('reportForm').style.display = 'none';
 }
 
 function newReport() {
-  currentReportId = 'report_' + Date.now();
-  resetForm();
-  loadSettings();
-  document.getElementById('homeScreen').style.display = 'none';
-  document.getElementById('reportForm').style.display = 'block';
-  showTab(0);
-
-  addCrewRow(); addCrewRow(); addCrewRow();addEquipRow('ownedEquipBody');
-  addEquipRow('ownedEquipBody');
+  try {
+    currentReportId = 'report_' + Date.now();
+    var home = document.getElementById('homeScreen');
+    var form = document.getElementById('reportForm');
+    if (!home || !form) {
+      if (window.__showStartupError) window.__showStartupError('newReport: home/form element missing');
+      return;
+    }
+    try { resetForm(); } catch(e) { if (window.__showStartupError) window.__showStartupError('resetForm: ' + e.message); }
+    try { loadSettings(); } catch(e) { if (window.__showStartupError) window.__showStartupError('loadSettings: ' + e.message); }
+    home.style.display = 'none';
+    form.style.display = 'block';
+    try { showTab(0); } catch(e) {}
+    try { addCrewRow(); addCrewRow(); addCrewRow(); } catch(e) {}
+    try { addEquipRow('ownedEquipBody'); addEquipRow('ownedEquipBody'); } catch(e) {}
+  } catch(e) {
+    if (window.__showStartupError) window.__showStartupError('newReport: ' + e.message);
+  }
 }
 
 // ======================== VOICE INPUT ========================
@@ -2257,15 +2349,67 @@ let activeVoiceBtn = null;
 // Check if we're in a secure context (required for microphone on mobile)
 function checkVoiceSupport() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('Voice input not supported. Use Chrome, Edge, or Safari.', 'error');
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.indexOf('Mac') !== -1 && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      showToast('Safari iOS does not expose Web Speech API. Use Chrome on iOS, or the iOS keyboard mic (tap the mic on the keyboard).', 'error');
+    } else {
+      showToast('Voice input not supported. Use Chrome, Edge, or Safari.', 'error');
+    }
     return false;
   }
-  // Mobile browsers require HTTPS for microphone access
-  if (window.isSecureContext === false || (location.protocol !== 'https:' && location.protocol !== 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')) {
+  // Microphone needs an http(s) origin with a real address bar. WhatsApp's in-app
+  // viewer hands the file off as content://com.whatsapp.provider.media/... and
+  // local files use file://; both have no permission UI, so getUserMedia is denied
+  // with no way for the user to recover. Reject early with an actionable message.
+  var proto = location.protocol;
+  var host = location.hostname;
+  if (proto !== 'http:' && proto !== 'https:') {
+    if (proto === 'content:' || /whatsapp/i.test(location.href)) {
+      showToast('WhatsApp can’t use the mic. Open in Chrome (⋮ menu → Open in Chrome) or visit the GitHub Pages link.', 'error');
+    } else if (proto === 'file:') {
+      showToast('Mic blocked on file:// URLs. Open via a web server or use the GitHub Pages link.', 'error');
+    } else {
+      showToast('Mic blocked on ' + proto + ' URLs. Open in Chrome or use the GitHub Pages link.', 'error');
+    }
+    return false;
+  }
+  var secureOk = (proto === 'https:') || host === 'localhost' || host === '127.0.0.1' || window.isSecureContext === true;
+  if (!secureOk) {
     showToast('Microphone requires HTTPS. Open via a web server or use GitHub Pages.', 'error');
     return false;
   }
   return true;
+}
+
+// Pre-flight microphone permission check via getUserMedia. Surfaces a clean OS prompt and clear error
+// reasons (NotAllowedError, NotFoundError) instead of the opaque "not-allowed" from SpeechRecognition.
+// Returns a Promise<boolean>.
+function ensureMicPermission() {
+  return new Promise(function(resolve){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // Older browser: skip pre-flight and let SpeechRecognition handle it.
+      resolve(true);
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
+      // Release the mic immediately so SpeechRecognition can take over.
+      try { stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e) {}
+      resolve(true);
+    }).catch(function(err){
+      var name = err && err.name ? err.name : 'Error';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        showToast('Microphone blocked. Tap the lock icon in the address bar and allow Microphone, then reload.', 'error');
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        showToast('No microphone found on this device.', 'error');
+      } else if (name === 'NotReadableError') {
+        showToast('Microphone is in use by another app. Close it and try again.', 'error');
+      } else {
+        showToast('Microphone error: ' + name, 'error');
+      }
+      resolve(false);
+    });
+  });
 }
 
 function voiceInput(fieldId) {
@@ -2277,7 +2421,7 @@ function voiceInput(fieldId) {
 
   // Toggle off if already recording this field
   if (recognition && activeVoiceBtn === btn) {
-    recognition.stop();
+    try { recognition.stop(); } catch(e) {}
     return;
   }
 
@@ -2287,66 +2431,75 @@ function voiceInput(fieldId) {
     if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
+  // Pre-flight permission so Android Chrome / desktop give a clean prompt before SpeechRecognition opens.
+  ensureMicPermission().then(function(ok){
+    if (!ok) return;
 
-  activeVoiceBtn = btn;
-  btn.classList.add('recording');
-  const startValue = field.value;
-  let finalTranscript = '';
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
 
-  recognition.onresult = (event) => {
-    let interim = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      if (event.results[i].isFinal) {
-        finalTranscript += event.results[i][0].transcript + ' ';
-      } else {
-        interim += event.results[i][0].transcript;
+    activeVoiceBtn = btn;
+    if (btn) btn.classList.add('recording');
+    const startValue = field.value;
+    let finalTranscript = '';
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        } else {
+          interim += event.results[i][0].transcript;
+        }
       }
-    }
-    const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
-    field.value = startValue + sep + finalTranscript + interim;
-    // Scroll textarea to bottom as text is added
-    if (field.tagName === 'TEXTAREA') {
-      field.scrollTop = field.scrollHeight;
-    }
-  };
+      const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+      field.value = startValue + sep + finalTranscript + interim;
+      if (field.tagName === 'TEXTAREA') {
+        field.scrollTop = field.scrollHeight;
+      }
+    };
 
-  recognition.onend = () => {
-    btn.classList.remove('recording');
-    const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
-    field.value = startValue + sep + finalTranscript.trim();
-    recognition = null;
-    activeVoiceBtn = null;
-  };
+    recognition.onend = () => {
+      if (btn) btn.classList.remove('recording');
+      const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+      field.value = startValue + sep + finalTranscript.trim();
+      recognition = null;
+      activeVoiceBtn = null;
+    };
 
-  recognition.onerror = (e) => {
-    btn.classList.remove('recording');
-    recognition = null;
-    activeVoiceBtn = null;
-    if (e.error === 'not-allowed') {
-      showToast('Microphone access denied. Check browser permissions.', 'error');
-    } else if (e.error === 'no-speech') {
-      showToast('No speech detected. Tap mic to try again.', 'error');
-    } else if (e.error === 'network') {
-      showToast('Network error — speech recognition needs internet.', 'error');
-    } else if (e.error !== 'aborted') {
-      showToast('Voice error: ' + e.error, 'error');
-    }
-  };
+    recognition.onerror = (e) => {
+      if (btn) btn.classList.remove('recording');
+      recognition = null;
+      activeVoiceBtn = null;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        showToast('Microphone blocked. Tap the lock icon, allow Mic, reload.', 'error');
+      } else if (e.error === 'no-speech') {
+        showToast('No speech detected. Tap mic to try again.', 'error');
+      } else if (e.error === 'network') {
+        showToast('Network error — speech recognition needs internet.', 'error');
+      } else if (e.error === 'audio-capture') {
+        showToast('Microphone unavailable. Check device input.', 'error');
+      } else if (e.error !== 'aborted') {
+        showToast('Voice error: ' + e.error, 'error');
+      }
+    };
 
-  try {
-    recognition.start();
-    showToast('Listening... Tap mic again to stop.', 'success');
-  } catch(e) {
-    btn.classList.remove('recording');
-    recognition = null;
-    activeVoiceBtn = null;
-    showToast('Could not start microphone: ' + e.message, 'error');
-  }
+    // Tiny delay helps iOS/Android Chrome release the getUserMedia track before SpeechRecognition starts.
+    setTimeout(function(){
+      try {
+        recognition.start();
+        showToast('Listening... Tap mic again to stop.', 'success');
+      } catch(e) {
+        if (btn) btn.classList.remove('recording');
+        recognition = null;
+        activeVoiceBtn = null;
+        showToast('Could not start microphone: ' + e.message, 'error');
+      }
+    }, 80);
+  });
 }
 
 // ======================== PHOTO HANDLING ========================
@@ -2497,7 +2650,9 @@ let sigCtx, sigDrawing = false;
 
 function initSignature() {
   const canvas = document.getElementById('sigCanvas');
+  if (!canvas || typeof canvas.getContext !== 'function') return;
   sigCtx = canvas.getContext('2d');
+  if (!sigCtx) return;
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -2527,7 +2682,7 @@ function initSignature() {
 
 function clearSignature() {
   const canvas = document.getElementById('sigCanvas');
-  sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  if (canvas && sigCtx) sigCtx.clearRect(0, 0, canvas.width, canvas.height);
   signatureData = null;
 }
 
@@ -2661,25 +2816,35 @@ function autoSave() {
 }
 
 function showSubmitted() {
-  const container = document.getElementById('submittedContainer');
-  const drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}');
-  const keys = Object.keys(drafts).filter(k => drafts[k].status === 'submitted');
+  try {
+    const container = document.getElementById('submittedContainer');
+    const list = document.getElementById('submittedList');
+    if (!container || !list) {
+      if (window.__showStartupError) window.__showStartupError('showSubmitted: list elements missing');
+      return;
+    }
+    let drafts = {};
+    try { drafts = JSON.parse(safeGetItem('fieldreport_drafts') || '{}'); } catch(e) { drafts = {}; }
+    const keys = Object.keys(drafts).filter(k => drafts[k].status === 'submitted');
 
-  if (keys.length === 0) {
-    container.innerHTML = '<p style="color:var(--text-light);text-align:center;">No submitted reports</p>';
-  } else {
-    container.innerHTML = keys.map(k => {
-      const d = drafts[k];
-      return `<div class="report-list-item" onclick="loadReport('${k}')">
-        <div class="rli-info">
-          <h4>${d.projectName || 'Untitled'}</h4>
-          <p>${d.reportDate || ''} - ${d.inspector || ''}</p>
-        </div>
-        <span class="rli-badge submitted">Submitted</span>
-      </div>`;
-    }).join('');
+    if (keys.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-light);text-align:center;">No submitted reports</p>';
+    } else {
+      container.innerHTML = keys.map(k => {
+        const d = drafts[k];
+        return `<div class="report-list-item" onclick="loadReport('${k}')">
+          <div class="rli-info">
+            <h4>${d.projectName || 'Untitled'}</h4>
+            <p>${d.reportDate || ''} - ${d.inspector || ''}</p>
+          </div>
+          <span class="rli-badge submitted">Submitted</span>
+        </div>`;
+      }).join('');
+    }
+    list.style.display = 'block';
+  } catch(e) {
+    if (window.__showStartupError) window.__showStartupError('showSubmitted: ' + e.message);
   }
-  document.getElementById('submittedList').style.display = 'block';
 }
 
 function loadReport(id) {
@@ -3378,6 +3543,9 @@ async function smartDictate() {
     return;
   }
 
+  const micOk = await ensureMicPermission();
+  if (!micOk) return;
+
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
   recognition.continuous = false;
@@ -3426,20 +3594,26 @@ async function smartDictate() {
   };
 
   recognition.onerror = (e) => {
-    if (e.error === 'not-allowed') {
-      showToast('Microphone access denied. Please allow microphone in browser settings.', 'error');
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      showToast('Microphone blocked. Tap the lock icon, allow Mic, reload.', 'error');
     } else if (e.error === 'no-speech') {
       showToast('No speech detected. Please try again.', 'error');
+    } else if (e.error === 'network') {
+      showToast('Network error — speech recognition needs internet.', 'error');
+    } else if (e.error === 'audio-capture') {
+      showToast('Microphone unavailable. Check device input.', 'error');
     } else if (e.error !== 'aborted') {
       showToast('Voice error: ' + e.error, 'error');
     }
   };
 
-  try {
-    recognition.start();
-  } catch(e) {
-    showToast('Could not start microphone: ' + e.message, 'error');
-  }
+  setTimeout(function(){
+    try {
+      recognition.start();
+    } catch(e) {
+      showToast('Could not start microphone: ' + e.message, 'error');
+    }
+  }, 80);
 }
 
 // ======================== FEATURE 4: PAY ITEMS ========================
