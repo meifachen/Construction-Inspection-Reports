@@ -1,0 +1,13 @@
+{
+  "name": "construction-inspection-reports",
+  "private": true,
+  "version": "0.0.0",
+  "description": "FieldReport Pro — daily construction inspection reports (single-file HTML apps).",
+  "scripts": {
+    "test": "node e2e_simple.js",
+    "test:verbose": "cross-env VERBOSE=1 node e2e_simple.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
