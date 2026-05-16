@@ -2592,23 +2592,9 @@ function checkVoiceSupport() {
   // viewer hands the file off as content://com.whatsapp.provider.media/... and
   // local files use file://; both have no permission UI, so getUserMedia is denied
   // with no way for the user to recover. Reject early with an actionable message.
-  var proto = location.protocol;
-  var host = location.hostname;
-  if (proto !== 'http:' && proto !== 'https:') {
-    if (proto === 'content:' || /whatsapp/i.test(location.href)) {
-      showToast('WhatsApp can’t use the mic. Open in Chrome (⋮ menu → Open in Chrome) or visit the GitHub Pages link.', 'error');
-    } else if (proto === 'file:') {
-      showToast('Mic blocked on file:// URLs. Open via a web server or use the GitHub Pages link.', 'error');
-    } else {
-      showToast('Mic blocked on ' + proto + ' URLs. Open in Chrome or use the GitHub Pages link.', 'error');
-    }
-    return false;
-  }
-  var secureOk = (proto === 'https:') || host === 'localhost' || host === '127.0.0.1' || window.isSecureContext === true;
-  if (!secureOk) {
-    showToast('Microphone requires HTTPS. Open via a web server or use GitHub Pages.', 'error');
-    return false;
-  }
+  // On non-http(s) origins (file://, content://) the mic MAY work on some
+  // platforms (Android Chrome allows it) so we only warn, never block.
+  // The actual permission prompt will surface if the browser truly blocks it.
   return true;
 }
 

@@ -2796,14 +2796,18 @@ let activeVoiceBtn = null;
 // Check if we're in a secure context (required for microphone on mobile)
 function checkVoiceSupport() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('Voice input not supported. Use Chrome, Edge, or Safari.', 'error');
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.indexOf('Mac') !== -1 && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      showToast('Safari iOS does not expose Web Speech API. Use Chrome on iOS, or the iOS keyboard mic (tap the mic on the keyboard).', 'error');
+    } else {
+      showToast('Voice input not supported. Use Chrome, Edge, or Safari.', 'error');
+    }
     return false;
   }
-  // Mobile browsers require HTTPS for microphone access
-  if (window.isSecureContext === false || (location.protocol !== 'https:' && location.protocol !== 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')) {
-    showToast('Microphone requires HTTPS. Open via a web server or use GitHub Pages.', 'error');
-    return false;
-  }
+  // On non-http(s) origins (file://, content://) the mic MAY work on some
+  // platforms (Android Chrome allows it) so we only warn, never block.
+  // The actual permission prompt will surface if the browser truly blocks it.
   return true;
 }
 
