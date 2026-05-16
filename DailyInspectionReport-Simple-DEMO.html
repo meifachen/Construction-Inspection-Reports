@@ -1773,6 +1773,111 @@ try { document.body.setAttribute('data-js', 'ok'); } catch(e) {}
         <label class="form-label">Engineer</label>
         <input type="text" class="form-input" id="settEngineer" placeholder="e.g. Tetra Tech, Inc.">
       </div>
+<div class="card" style="text-align:center;">
+      <button class="btn-primary btn-block" style="background:var(--ai-accent); margin-bottom:8px;" onclick="aiCleanupFullReport()">
+        ✨ AI Clean Up Full Report
+      </button>
+      <button class="btn-primary btn-block btn-success" onclick="saveDraft()" style="margin-bottom:8px;">
+        Save Draft
+      </button>
+      <button class="btn-primary btn-block" onclick="generatePDF()" style="margin-bottom:8px;">
+        Preview & Generate PDF
+      </button>
+      <button class="btn-primary btn-block" onclick="sharePDF()" style="margin-bottom:8px;background:var(--accent);">
+        &#128229; Share Report
+      </button>
+      <button class="btn-primary btn-block btn-warning" onclick="submitReport()">
+        Submit Report
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== ANNOTATION OVERLAY ==================== -->
+<div id="annotationOverlay" class="annotation-overlay">
+  <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+  <div class="annotation-toolbar">
+    <button onclick="setAnnotationTool('draw')" class="active">Draw</button>
+    <button onclick="setAnnotationTool('arrow')">Arrow</button>
+    <button onclick="setAnnotationTool('text')">Text</button>
+    <button onclick="setAnnotationTool('circle')">Circle</button>
+    <button onclick="undoAnnotation()">Undo</button>
+    <button onclick="saveAnnotation()" style="background:var(--success);color:white;">Save</button>
+    <button onclick="cancelAnnotation()" style="background:var(--danger);color:white;">Cancel</button>
+  </div>
+</div>
+
+<!-- ==================== SETTINGS MODAL ==================== -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Settings & Defaults</h3>
+      <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">General Settings</h4>
+      <div class="form-group">
+        <label class="form-label">Default Company Name</label>
+        <input type="text" class="form-input" id="settCompany" placeholder="Your company">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Inspector Name</label>
+        <input type="text" class="form-input" id="settInspector" placeholder="Default inspector">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Project Name / No.</label>
+        <input type="text" class="form-input" id="settProject" placeholder="Default project">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Company Logo URL (optional)</label>
+        <input type="text" class="form-input" id="settLogo" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Owner / Client</label>
+        <input type="text" class="form-input" id="settOwner" placeholder="e.g. City of Hollywood">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Engineer</label>
+        <input type="text" class="form-input" id="settEngineer" placeholder="e.g. Tetra Tech, Inc.">
+      </div>
+      <button class="btn-primary btn-block" onclick="saveSettings()">Save Settings</button>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+
+    <div style="margin-bottom:24px;">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">User Role</h4>
+      <select class="form-input" id="userRoleSelect" onchange="safeSetItem('fieldreport_user_role',this.value);applyRolePermissions();">
+        <option value="Inspector">Inspector (Full Access)</option>
+        <option value="Superintendent">Superintendent (View/Edit)</option>
+        <option value="Foreman">Foreman (Limited Access)</option>
+        <option value="PM">Project Manager (Read-Only)</option>
+      </select>
+    </div>
+
+    <div>
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">AI Providers</h4>
+      <div id="aiProvidersContainer" style="margin-bottom:12px;"></div>
+      <button class="btn-primary btn-block" onclick="addNewAIProvider()" style="background:var(--ai-accent);">+ Add AI Provider</button>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+
+    <div style="margin-bottom:24px;">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">Voice Input (iOS)</h4>
+      <p style="font-size:12px;color:var(--text-light);margin-bottom:8px;">Required for voice on iPhone/iPad. Free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a></p>
+      <div class="form-group">
+        <label class="form-label">Whisper API Key</label>
+        <input type="password" class="form-input" id="settWhisperKey" placeholder="gsk_...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Whisper Endpoint</label>
+        <input type="text" class="form-input" id="settWhisperEndpoint" placeholder="https://api.groq.com/openai/v1/audio/transcriptions">
+      </div>
+
+
       <button class="btn-primary btn-block" onclick="saveSettings()">Save Settings</button>
     </div>
 
@@ -1862,6 +1967,258 @@ function safeSetItem(key, value) {
 }
 function safeRemoveItem(key) {
   try { if (isStorageAvailable()) localStorage.removeItem(key); } catch(e) {}
+}
+
+// ======================== WHISPER API (iOS VOICE FALLBACK) ========================
+function getWhisperConfig() {
+  try {
+    var raw = safeGetItem('fieldreport_whisper');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function saveWhisperSettings() {
+  var cfg = {
+    apiKey: document.getElementById('settWhisperKey').value.trim(),
+    endpoint: document.getElementById('settWhisperEndpoint').value.trim() || 'https://api.groq.com/openai/v1/audio/transcriptions',
+    model: document.getElementById('settWhisperModel').value.trim() || 'whisper-large-v3-turbo'
+  };
+  safeSetItem('fieldreport_whisper', JSON.stringify(cfg));
+  showToast('Whisper settings saved!', 'success');
+}
+
+function loadWhisperSettings() {
+  try {
+    var cfg = getWhisperConfig();
+    if (!cfg) return;
+    if (cfg.apiKey) document.getElementById('settWhisperKey').value = cfg.apiKey;
+    if (cfg.endpoint) document.getElementById('settWhisperEndpoint').value = cfg.endpoint;
+    if (cfg.model) document.getElementById('settWhisperModel').value = cfg.model;
+  } catch(e) {}
+}
+
+function getRecordingMimeType() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus';
+  if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+  if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
+  if (MediaRecorder.isTypeSupported('audio/aac')) return 'audio/aac';
+  if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) return 'audio/ogg;codecs=opus';
+  // Fallback: let the browser pick
+  return '';
+}
+
+function getFileExtForMime(mime) {
+  if (!mime) return 'webm';
+  if (mime.indexOf('mp4') !== -1) return 'mp4';
+  if (mime.indexOf('aac') !== -1) return 'aac';
+  if (mime.indexOf('ogg') !== -1) return 'ogg';
+  return 'webm';
+}
+
+var _whisperRecordingActive = false;
+
+function recordAndTranscribe(fieldId, maxSeconds) {
+  if (_whisperRecordingActive) {
+    showToast('Recording already in progress.', 'error');
+    return Promise.resolve('');
+  }
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Audio recording not supported on this browser.', 'error');
+    return Promise.resolve('');
+  }
+
+  var whisperCfg = getWhisperConfig();
+  if (!whisperCfg || !whisperCfg.apiKey) {
+    showToast('Whisper API key not configured. Set it up in Settings.', 'error');
+    return Promise.resolve('');
+  }
+
+  var maxTime = maxSeconds || 30;
+  var mimeType = getRecordingMimeType();
+
+  return navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    return new Promise(function(resolve) {
+      _whisperRecordingActive = true;
+      var chunks = [];
+      var recorderOptions = {};
+      if (mimeType) recorderOptions.mimeType = mimeType;
+      var recorder;
+      try {
+        recorder = new MediaRecorder(stream, recorderOptions);
+      } catch(e) {
+        // If explicit mimeType fails, try without
+        recorder = new MediaRecorder(stream);
+      }
+
+      // Build recording overlay UI
+      var overlay = document.createElement('div');
+      overlay.id = 'whisperRecordingOverlay';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;';
+      overlay.innerHTML =
+        '<div style="background:white;border-radius:16px;padding:32px 24px;text-align:center;max-width:300px;width:90%;">' +
+          '<div id="whisperPulse" style="width:64px;height:64px;border-radius:50%;background:#e53e3e;margin:0 auto 16px;animation:whisperPulse 1s ease-in-out infinite;"></div>' +
+          '<div style="font-size:18px;font-weight:600;margin-bottom:8px;">Recording...</div>' +
+          '<div id="whisperTimer" style="font-size:14px;color:#718096;margin-bottom:16px;">0:00</div>' +
+          '<button id="whisperStopBtn" style="background:#e53e3e;color:white;border:none;padding:12px 32px;border-radius:8px;font-size:16px;cursor:pointer;">Tap to Stop</button>' +
+        '</div>';
+
+      // Inject pulse animation if not present
+      if (!document.getElementById('whisperPulseStyle')) {
+        var styleEl = document.createElement('style');
+        styleEl.id = 'whisperPulseStyle';
+        styleEl.textContent = '@keyframes whisperPulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.2);opacity:0.7;}}';
+        document.head.appendChild(styleEl);
+      }
+
+      document.body.appendChild(overlay);
+
+      var elapsed = 0;
+      var timerInterval = setInterval(function() {
+        elapsed++;
+        var mins = Math.floor(elapsed / 60);
+        var secs = elapsed % 60;
+        var timerEl = document.getElementById('whisperTimer');
+        if (timerEl) timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+      }, 1000);
+
+      var maxTimer = setTimeout(function() {
+        if (recorder.state === 'recording') {
+          recorder.stop();
+        }
+      }, maxTime * 1000);
+
+      function cleanup() {
+        clearInterval(timerInterval);
+        clearTimeout(maxTimer);
+        _whisperRecordingActive = false;
+        try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch(e) {}
+        var ov = document.getElementById('whisperRecordingOverlay');
+        if (ov) ov.parentNode.removeChild(ov);
+      }
+
+      document.getElementById('whisperStopBtn').addEventListener('click', function() {
+        if (recorder.state === 'recording') {
+          recorder.stop();
+        }
+      });
+
+      // Also allow tapping overlay background to stop
+      overlay.addEventListener('click', function(ev) {
+        if (ev.target === overlay && recorder.state === 'recording') {
+          recorder.stop();
+        }
+      });
+
+      recorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = function() {
+        cleanup();
+
+        if (chunks.length === 0) {
+          showToast('No audio recorded.', 'error');
+          resolve('');
+          return;
+        }
+
+        var actualMime = recorder.mimeType || mimeType || 'audio/webm';
+        var blob = new Blob(chunks, { type: actualMime });
+        var ext = getFileExtForMime(actualMime);
+
+        showToast('Transcribing audio...', '');
+
+        var formData = new FormData();
+        formData.append('file', blob, 'recording.' + ext);
+        formData.append('model', whisperCfg.model || 'whisper-large-v3-turbo');
+
+        fetch(whisperCfg.endpoint || 'https://api.groq.com/openai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + whisperCfg.apiKey
+          },
+          body: formData
+        }).then(function(resp) {
+          if (!resp.ok) {
+            return resp.text().then(function(t) { throw new Error('Whisper API ' + resp.status + ': ' + t); });
+          }
+          return resp.json();
+        }).then(function(data) {
+          var text = data.text || '';
+          if (!text) {
+            showToast('No speech detected in recording.', 'error');
+          }
+          resolve(text);
+        }).catch(function(err) {
+          showToast('Transcription failed: ' + err.message, 'error');
+          resolve('');
+        });
+      };
+
+      recorder.onerror = function(e) {
+        cleanup();
+        showToast('Recording error: ' + (e.error || e.message || 'unknown'), 'error');
+        resolve('');
+      };
+
+      recorder.start();
+    });
+  }).catch(function(err) {
+    _whisperRecordingActive = false;
+    var name = err && err.name ? err.name : 'Error';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      showToast('Microphone blocked. Tap the lock icon in the address bar and allow Microphone, then reload.', 'error');
+    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      showToast('No microphone found on this device.', 'error');
+    } else {
+      showToast('Microphone error: ' + name, 'error');
+    }
+    return '';
+  });
+}
+
+// ======================== DIAGNOSTICS / FALLBACK BUTTON WIRING ========================
+// On some WebViews (WhatsApp viewer, in-app browsers, older iOS) the inline onclick=""
+// handler can be stripped by Content-Security-Policy or fail to bind. addEventListener
+// runs in addition so the button still works.
+var __diagClicks = 0;
+function wireHomeButtons() {
+  var n = document.getElementById('btnNewReport');
+  var s = document.getElementById('btnShowSubmitted');
+  function bind(el, handler) {
+    if (!el) return;
+    var fired = false;
+    function go(ev) {
+      if (fired) return; fired = true;
+      __diagClicks++;
+      var c = document.getElementById('diagClicks');
+      if (c) c.textContent = 'Click count: ' + __diagClicks;
+      try { handler(); } catch(e) {
+        if (window.__showStartupError) window.__showStartupError('handler: ' + e.message);
+      }
+      setTimeout(function(){ fired = false; }, 400);
+    }
+    el.addEventListener('click', go);
+    el.addEventListener('touchend', function(ev){ ev.preventDefault(); go(ev); }, { passive: false });
+  }
+  bind(n, function(){ if (typeof newReport === 'function') newReport(); });
+  bind(s, function(){ if (typeof showSubmitted === 'function') showSubmitted(); });
+}
+
+function renderDiagnostics() {
+  var set = function(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('diagJS',      'JS: ok');
+  set('diagInit',    'Init: ' + (window.__initDone ? 'ok' : 'pending'));
+  set('diagProto',   'Proto: ' + location.protocol);
+  set('diagSecure',  'Secure: ' + (window.isSecureContext ? 'yes' : 'no'));
+  var hasSR = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+  set('diagSR',      'SpeechRec: ' + (hasSR ? 'yes' : 'no'));
+  var hasMD = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  set('diagMD',      'getUserMedia: ' + (hasMD ? 'yes' : 'no'));
+  set('diagStorage', 'Storage: ' + (isStorageAvailable() ? 'ok' : 'unavailable'));
+  set('diagUA',      'UA: ' + (navigator.userAgent || 'unknown').slice(0, 90));
 }
 
 // ======================== STATE ========================
@@ -2266,85 +2623,119 @@ function checkVoiceSupport() {
 }
 
 function voiceInput(fieldId) {
-  if (!checkVoiceSupport()) return;
+  var hasSpeechAPI = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
 
-  const field = document.getElementById(fieldId);
-  if (!field) return;
-  const btn = field.parentElement.querySelector('.voice-btn');
+  if (hasSpeechAPI && checkVoiceSupport()) {
+    // Native Web Speech API path
+    var field = document.getElementById(fieldId);
+    if (!field) return;
+    var btn = field.parentElement.querySelector('.voice-btn');
 
-  // Toggle off if already recording this field
-  if (recognition && activeVoiceBtn === btn) {
-    recognition.stop();
-    return;
-  }
+    // Toggle off if already recording this field
+    if (recognition && activeVoiceBtn === btn) {
+      try { recognition.stop(); } catch(e) {}
+      return;
+    }
 
-  // Stop any existing recognition
-  if (recognition) {
-    try { recognition.stop(); } catch(e) {}
-    if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
-  }
+    // Stop any existing recognition
+    if (recognition) {
+      try { recognition.stop(); } catch(e) {}
+      if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
+    }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
+    // Pre-flight permission so Android Chrome / desktop give a clean prompt before SpeechRecognition opens.
+    ensureMicPermission().then(function(ok){
+      if (!ok) return;
 
-  activeVoiceBtn = btn;
-  btn.classList.add('recording');
-  const startValue = field.value;
-  let finalTranscript = '';
+      var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognitionCtor();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-  recognition.onresult = (event) => {
-    let interim = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      if (event.results[i].isFinal) {
-        finalTranscript += event.results[i][0].transcript + ' ';
-      } else {
-        interim += event.results[i][0].transcript;
+      activeVoiceBtn = btn;
+      if (btn) btn.classList.add('recording');
+      var startValue = field.value;
+      var finalTranscript = '';
+
+      recognition.onresult = function(event) {
+        var interim = '';
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        var sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+        field.value = startValue + sep + finalTranscript + interim;
+        if (field.tagName === 'TEXTAREA') {
+          field.scrollTop = field.scrollHeight;
+        }
+      };
+
+      recognition.onend = function() {
+        if (btn) btn.classList.remove('recording');
+        var sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+        field.value = startValue + sep + finalTranscript.trim();
+        recognition = null;
+        activeVoiceBtn = null;
+      };
+
+      recognition.onerror = function(e) {
+        if (btn) btn.classList.remove('recording');
+        recognition = null;
+        activeVoiceBtn = null;
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          showToast('Microphone blocked. Tap the lock icon, allow Mic, reload.', 'error');
+        } else if (e.error === 'no-speech') {
+          showToast('No speech detected. Tap mic to try again.', 'error');
+        } else if (e.error === 'network') {
+          showToast('Network error — speech recognition needs internet.', 'error');
+        } else if (e.error === 'audio-capture') {
+          showToast('Microphone unavailable. Check device input.', 'error');
+        } else if (e.error !== 'aborted') {
+          showToast('Voice error: ' + e.error, 'error');
+        }
+      };
+
+      // Tiny delay helps iOS/Android Chrome release the getUserMedia track before SpeechRecognition starts.
+      setTimeout(function(){
+        try {
+          recognition.start();
+          showToast('Listening... Tap mic again to stop.', 'success');
+        } catch(e) {
+          if (btn) btn.classList.remove('recording');
+          recognition = null;
+          activeVoiceBtn = null;
+          showToast('Could not start microphone: ' + e.message, 'error');
+        }
+      }, 80);
+    });
+
+  } else {
+    // Whisper API fallback (iOS Safari, etc.)
+    var whisperConfig = getWhisperConfig();
+    if (!whisperConfig || !whisperConfig.apiKey) {
+      showToast('Voice not available. Set up Whisper API in Settings for iOS support.', 'error');
+      return;
+    }
+    var targetField = document.getElementById(fieldId);
+    if (!targetField) return;
+    var startVal = targetField.value;
+    recordAndTranscribe(fieldId, 30).then(function(text) {
+      if (text) {
+        var sep = startVal && !startVal.endsWith(' ') && !startVal.endsWith('\n') ? ' ' : '';
+        targetField.value = startVal + sep + text.trim();
+        if (targetField.tagName === 'TEXTAREA') {
+          targetField.scrollTop = targetField.scrollHeight;
+        }
+        showToast('Voice input added.', 'success');
       }
-    }
-    const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
-    field.value = startValue + sep + finalTranscript + interim;
-    // Scroll textarea to bottom as text is added
-    if (field.tagName === 'TEXTAREA') {
-      field.scrollTop = field.scrollHeight;
-    }
-  };
-
-  recognition.onend = () => {
-    btn.classList.remove('recording');
-    const sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
-    field.value = startValue + sep + finalTranscript.trim();
-    recognition = null;
-    activeVoiceBtn = null;
-  };
-
-  recognition.onerror = (e) => {
-    btn.classList.remove('recording');
-    recognition = null;
-    activeVoiceBtn = null;
-    if (e.error === 'not-allowed') {
-      showToast('Microphone access denied. Check browser permissions.', 'error');
-    } else if (e.error === 'no-speech') {
-      showToast('No speech detected. Tap mic to try again.', 'error');
-    } else if (e.error === 'network') {
-      showToast('Network error — speech recognition needs internet.', 'error');
-    } else if (e.error !== 'aborted') {
-      showToast('Voice error: ' + e.error, 'error');
-    }
-  };
-
-  try {
-    recognition.start();
-    showToast('Listening... Tap mic again to stop.', 'success');
-  } catch(e) {
-    btn.classList.remove('recording');
-    recognition = null;
-    activeVoiceBtn = null;
-    showToast('Could not start microphone: ' + e.message, 'error');
+    });
   }
 }
+
 
 // ======================== PHOTO HANDLING ========================
 function handlePhotoUpload(event, gridId) {
@@ -2542,6 +2933,7 @@ function loadSettings() {
     if (s.owner) document.getElementById('settOwner').value = s.owner;
     if (s.engineer) document.getElementById('settEngineer').value = s.engineer;
     const role = safeGetItem('fieldreport_user_role') || 'Inspector';
+    loadWhisperSettings();
     document.getElementById('userRoleSelect').value = role;
   } catch(e) {}
 }
@@ -3367,49 +3759,39 @@ async function autoFillWeather() {
 
 // ======================== FEATURE 3: SMART DICTATE ========================
 async function smartDictate() {
-  if (!checkVoiceSupport()) return;
+  var hasSpeechAPI = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
 
-  const aiProvider = aiProviders.find(p => p.active) || aiProviders[0];
+  var aiProvider = aiProviders.find(function(p) { return p.active; }) || aiProviders[0];
   if (!aiProvider || !aiProvider.apiKey) {
     showToast('No AI provider configured. Set up in Settings first.', 'error');
     return;
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = 'en-US';
-
-  showToast('Listening... Speak freely about today\'s work', '');
-
-  recognition.onresult = async (event) => {
-    const transcript = Array.from(event.results)
-      .map(result => result[0].transcript)
-      .join('');
+  // Helper to process the transcript through AI
+  function processTranscriptWithAI(transcript) {
+    if (!transcript) return;
     showToast('Processing dictation with AI...', '');
-    try {
-      const prompt = `Parse this construction inspection dictation into JSON fields. Extract: workPerformed, weather (sunny/cloudy/rain), tempHigh, tempLow, crewCount, changeOrders, testsPerformed, lookAhead. Return ONLY valid JSON with no markdown. Dictation: "${transcript}"`;
-      const response = await fetch(aiProvider.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + aiProvider.apiKey
-        },
-        body: JSON.stringify({
-          model: aiProvider.model,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.2,
-          max_tokens: 1024
-        })
-      });
+    var prompt = 'Parse this construction inspection dictation into JSON fields. Extract: workPerformed, weather (sunny/cloudy/rain), tempHigh, tempLow, crewCount, changeOrders, testsPerformed, lookAhead. Return ONLY valid JSON with no markdown. Dictation: "' + transcript + '"';
+    fetch(aiProvider.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + aiProvider.apiKey
+      },
+      body: JSON.stringify({
+        model: aiProvider.model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2,
+        max_tokens: 1024
+      })
+    }).then(function(response) {
       if (!response.ok) throw new Error('AI API returned ' + response.status);
-      const result = await response.json();
-      const aiText = result.choices?.[0]?.message?.content || '';
-      // Extract JSON from response (handle possible markdown code fences)
-      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+      return response.json();
+    }).then(function(result) {
+      var aiText = (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content) || '';
+      var jsonMatch = aiText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('No JSON in AI response');
-      const parsed = JSON.parse(jsonMatch[0]);
+      var parsed = JSON.parse(jsonMatch[0]);
       if (parsed.workPerformed) document.getElementById('workPerformed').value = parsed.workPerformed;
       if (parsed.changeOrders) document.getElementById('changeOrders').value = parsed.changeOrders;
       if (parsed.testsPerformed) document.getElementById('testsPerformed').value = parsed.testsPerformed;
@@ -3417,27 +3799,70 @@ async function smartDictate() {
       if (parsed.tempHigh) document.getElementById('tempHigh').value = parsed.tempHigh;
       if (parsed.tempLow) document.getElementById('tempLow').value = parsed.tempLow;
       showToast('Dictation parsed and fields filled!', 'success');
-    } catch(e) {
+    }).catch(function(e) {
       showToast('AI parsing failed: ' + e.message, 'error');
-    }
-  };
+    });
+  }
 
-  recognition.onerror = (e) => {
-    if (e.error === 'not-allowed') {
-      showToast('Microphone access denied. Please allow microphone in browser settings.', 'error');
-    } else if (e.error === 'no-speech') {
-      showToast('No speech detected. Please try again.', 'error');
-    } else if (e.error !== 'aborted') {
-      showToast('Voice error: ' + e.error, 'error');
-    }
-  };
+  if (hasSpeechAPI && checkVoiceSupport()) {
+    // Native Web Speech API path
+    var micOk = await ensureMicPermission();
+    if (!micOk) return;
 
-  try {
-    recognition.start();
-  } catch(e) {
-    showToast('Could not start microphone: ' + e.message, 'error');
+    var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var dictateRecognition = new SpeechRecognitionCtor();
+    dictateRecognition.continuous = false;
+    dictateRecognition.interimResults = false;
+    dictateRecognition.lang = 'en-US';
+
+    showToast('Listening... Speak freely about today\'s work', '');
+
+    dictateRecognition.onresult = function(event) {
+      var transcript = '';
+      for (var i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      processTranscriptWithAI(transcript);
+    };
+
+    dictateRecognition.onerror = function(e) {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        showToast('Microphone blocked. Tap the lock icon, allow Mic, reload.', 'error');
+      } else if (e.error === 'no-speech') {
+        showToast('No speech detected. Please try again.', 'error');
+      } else if (e.error === 'network') {
+        showToast('Network error — speech recognition needs internet.', 'error');
+      } else if (e.error === 'audio-capture') {
+        showToast('Microphone unavailable. Check device input.', 'error');
+      } else if (e.error !== 'aborted') {
+        showToast('Voice error: ' + e.error, 'error');
+      }
+    };
+
+    setTimeout(function(){
+      try {
+        dictateRecognition.start();
+      } catch(e) {
+        showToast('Could not start microphone: ' + e.message, 'error');
+      }
+    }, 80);
+
+  } else {
+    // Whisper API fallback (iOS Safari, etc.)
+    var whisperConfig = getWhisperConfig();
+    if (!whisperConfig || !whisperConfig.apiKey) {
+      showToast('Voice not available. Set up Whisper API in Settings for iOS support.', 'error');
+      return;
+    }
+    showToast('Recording... Speak freely about today\'s work', '');
+    recordAndTranscribe(null, 60).then(function(transcript) {
+      if (transcript) {
+        processTranscriptWithAI(transcript);
+      }
+    });
   }
 }
+
 
 // ======================== FEATURE 4: PAY ITEMS ========================
 function getPayItemsData() {
