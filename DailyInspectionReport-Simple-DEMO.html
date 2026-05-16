@@ -2647,11 +2647,7 @@ function voiceInput(fieldId) {
       if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
     }
 
-    // Pre-flight permission so Android Chrome / desktop give a clean prompt before SpeechRecognition opens.
-    ensureMicPermission().then(function(ok){
-      if (!ok) return;
-
-      var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRecognitionCtor();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -2714,8 +2710,7 @@ function voiceInput(fieldId) {
           activeVoiceBtn = null;
           showToast('Could not start microphone: ' + e.message, 'error');
         }
-      }, 80);
-    });
+    }, 80);
 
   } else {
     // Whisper API fallback (iOS Safari, etc.)
@@ -3810,9 +3805,6 @@ async function smartDictate() {
 
   if (hasSpeechAPI && checkVoiceSupport()) {
     // Native Web Speech API path
-    var micOk = await ensureMicPermission();
-    if (!micOk) return;
-
     var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     var dictateRecognition = new SpeechRecognitionCtor();
     dictateRecognition.continuous = false;

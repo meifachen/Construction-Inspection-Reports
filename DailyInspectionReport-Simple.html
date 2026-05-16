@@ -2649,75 +2649,67 @@ function voiceInput(fieldId) {
       if (activeVoiceBtn) activeVoiceBtn.classList.remove('recording');
     }
 
-    // Pre-flight permission so Android Chrome / desktop give a clean prompt before SpeechRecognition opens.
-    ensureMicPermission().then(function(ok){
-      if (!ok) return;
+    var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
 
-      var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognitionCtor();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+    activeVoiceBtn = btn;
+    if (btn) btn.classList.add('recording');
+    var startValue = field.value;
+    var finalTranscript = '';
 
-      activeVoiceBtn = btn;
-      if (btn) btn.classList.add('recording');
-      var startValue = field.value;
-      var finalTranscript = '';
-
-      recognition.onresult = function(event) {
-        var interim = '';
-        for (var i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript + ' ';
-          } else {
-            interim += event.results[i][0].transcript;
-          }
+    recognition.onresult = function(event) {
+      var interim = '';
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        } else {
+          interim += event.results[i][0].transcript;
         }
-        var sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
-        field.value = startValue + sep + finalTranscript + interim;
-        if (field.tagName === 'TEXTAREA') {
-          field.scrollTop = field.scrollHeight;
-        }
-      };
+      }
+      var sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+      field.value = startValue + sep + finalTranscript + interim;
+      if (field.tagName === 'TEXTAREA') {
+        field.scrollTop = field.scrollHeight;
+      }
+    };
 
-      recognition.onend = function() {
-        if (btn) btn.classList.remove('recording');
-        var sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
-        field.value = startValue + sep + finalTranscript.trim();
-        recognition = null;
-        activeVoiceBtn = null;
-      };
+    recognition.onend = function() {
+      if (btn) btn.classList.remove('recording');
+      var sep = startValue && !startValue.endsWith(' ') && !startValue.endsWith('\n') ? ' ' : '';
+      field.value = startValue + sep + finalTranscript.trim();
+      recognition = null;
+      activeVoiceBtn = null;
+    };
 
-      recognition.onerror = function(e) {
-        if (btn) btn.classList.remove('recording');
-        recognition = null;
-        activeVoiceBtn = null;
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          showToast('Microphone blocked. Tap the lock icon, allow Mic, reload.', 'error');
-        } else if (e.error === 'no-speech') {
-          showToast('No speech detected. Tap mic to try again.', 'error');
-        } else if (e.error === 'network') {
-          showToast('Network error — speech recognition needs internet.', 'error');
-        } else if (e.error === 'audio-capture') {
-          showToast('Microphone unavailable. Check device input.', 'error');
-        } else if (e.error !== 'aborted') {
-          showToast('Voice error: ' + e.error, 'error');
-        }
-      };
+    recognition.onerror = function(e) {
+      if (btn) btn.classList.remove('recording');
+      recognition = null;
+      activeVoiceBtn = null;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        showToast('Microphone blocked. Tap the lock icon, allow Mic, reload.', 'error');
+      } else if (e.error === 'no-speech') {
+        showToast('No speech detected. Tap mic to try again.', 'error');
+      } else if (e.error === 'network') {
+        showToast('Network error — speech recognition needs internet.', 'error');
+      } else if (e.error === 'audio-capture') {
+        showToast('Microphone unavailable. Check device input.', 'error');
+      } else if (e.error !== 'aborted') {
+        showToast('Voice error: ' + e.error, 'error');
+      }
+    };
 
-      // Tiny delay helps iOS/Android Chrome release the getUserMedia track before SpeechRecognition starts.
-      setTimeout(function(){
-        try {
-          recognition.start();
-          showToast('Listening... Tap mic again to stop.', 'success');
-        } catch(e) {
-          if (btn) btn.classList.remove('recording');
-          recognition = null;
-          activeVoiceBtn = null;
-          showToast('Could not start microphone: ' + e.message, 'error');
-        }
-      }, 80);
-    });
+    try {
+      recognition.start();
+      showToast('Listening... Tap mic again to stop.', 'success');
+    } catch(e) {
+      if (btn) btn.classList.remove('recording');
+      recognition = null;
+      activeVoiceBtn = null;
+      showToast('Could not start microphone: ' + e.message, 'error');
+    }
 
   } else {
     // Whisper API fallback (iOS Safari, etc.)
@@ -3823,9 +3815,6 @@ async function smartDictate() {
 
   if (hasSpeechAPI && checkVoiceSupport()) {
     // Native Web Speech API path
-    var micOk = await ensureMicPermission();
-    if (!micOk) return;
-
     var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     var dictateRecognition = new SpeechRecognitionCtor();
     dictateRecognition.continuous = false;
